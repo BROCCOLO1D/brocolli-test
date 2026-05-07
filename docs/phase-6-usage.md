@@ -10,6 +10,7 @@ import {
   approveTransaction,
   assertWalletState,
   connectWallet,
+  createWalletDappPageDriver,
   resetProfile,
   switchNetwork
 } from '@agent-browser-wallet/wallet-browser';
@@ -17,7 +18,7 @@ import {
 
 The helper module composes the earlier launcher/config, onboarding, and network layers through typed driver boundaries:
 
-- `WalletDappDriver` initiates dapp-side requests such as `eth_requestAccounts`, optional signature requests, optional transaction requests, and reads the connected account.
+- `WalletDappDriver` initiates dapp-side requests such as `eth_requestAccounts`, optional signature requests, optional transaction requests, and reads the connected account. `createWalletDappPageDriver()` adapts stable Playwright-style selectors into this interface for fixture dapps.
 - `WalletPromptDriver` owns MetaMask prompt approval methods. Missing signature or transaction approval methods fail closed instead of guessing at extension UI state.
 - `MetaMaskNetworkDriver` is reused from Phase 4 for chain/account assertions and Sepolia switching.
 - `WalletControlLogger` receives sanitized structured events for helper lifecycle and prompt decisions.
@@ -25,15 +26,15 @@ The helper module composes the earlier launcher/config, onboarding, and network 
 ## Mocked fixture-style connect example
 
 ```ts
+import { getFixtureSelectors } from '../apps/fixture-dapp/src/fixture.js';
+
+const dapp = createWalletDappPageDriver({
+  page,
+  selectors: getFixtureSelectors()
+});
+
 const result = await connectWallet({
-  dapp: {
-    async requestConnect() {
-      await page.getByTestId('connect-wallet-button').click();
-    },
-    async getConnectedAccount() {
-      return page.getByTestId('connected-account').textContent();
-    }
-  },
+  dapp,
   prompt: {
     async approveConnection({ origin, expectedAccount, expectedChainIdHex }) {
       // Future real MetaMask popup automation plugs in here.

@@ -11,6 +11,7 @@ import {
   approveTransaction,
   assertWalletState,
   connectWallet,
+  createWalletDappPageDriver,
   resetProfile,
   switchNetwork,
   type MetaMaskNetworkDriver,
@@ -146,6 +147,46 @@ describe('wallet-control helpers', () => {
   it('fails closed for signature and transaction prompts until prompt driver approval is explicitly implemented', async () => {
     await expect(approveSignature({ prompt: {}, origin: 'https://fixture.example', expectedAccount: ADDRESS, message: 'hello' })).rejects.toThrow(/not implemented|fail closed/i);
     await expect(approveTransaction({ prompt: {}, origin: 'https://fixture.example', expectedAccount: ADDRESS, to: ADDRESS, value: '0x0' })).rejects.toThrow(/not implemented|fail closed/i);
+  });
+
+  it('creates a page-backed dapp driver from stable selectors', async () => {
+    const calls: string[] = [];
+    const texts = new Map([['[data-testid="connected-account"]', ADDRESS]]);
+    const page = {
+      locator(selector: string) {
+        return {
+          async click() {
+            calls.push(`click:${selector}`);
+          },
+          async textContent() {
+            calls.push(`text:${selector}`);
+            return texts.get(selector) ?? null;
+          }
+        };
+      }
+    };
+
+    const dapp = createWalletDappPageDriver({
+      page,
+      selectors: {
+        connectButton: '[data-testid="connect-wallet-button"]',
+        connectedAccount: '[data-testid="connected-account"]',
+        signMessageButton: '[data-testid="sign-message-button"]',
+        sendTransactionButton: '[data-testid="send-transaction-button"]'
+      }
+    });
+
+    await dapp.requestConnect();
+    await expect(dapp.getConnectedAccount()).resolves.toBe(ADDRESS);
+    await dapp.requestSignature?.({ expectedAccount: ADDRESS, message: 'hello' });
+    await dapp.requestTransaction?.({ expectedAccount: ADDRESS, to: ADDRESS, value: '0x0' });
+
+    expect(calls).toEqual([
+      'click:[data-testid="connect-wallet-button"]',
+      'text:[data-testid="connected-account"]',
+      'click:[data-testid="sign-message-button"]',
+      'click:[data-testid="send-transaction-button"]'
+    ]);
   });
 
   it('sequences dapp signature and transaction requests before explicit prompt driver approvals', async () => {

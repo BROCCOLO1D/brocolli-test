@@ -44,6 +44,27 @@ export interface WalletDappDriver {
   requestTransaction?(input: WalletTransactionRequestInput): Promise<void>;
 }
 
+export interface WalletDappPageLocator {
+  click(): Promise<void>;
+  textContent(): Promise<string | null>;
+}
+
+export interface WalletDappPageLike {
+  locator(selector: string): WalletDappPageLocator;
+}
+
+export interface WalletDappPageDriverSelectors {
+  connectButton: string;
+  connectedAccount: string;
+  signMessageButton: string;
+  sendTransactionButton: string;
+}
+
+export interface WalletDappPageDriverOptions {
+  page: WalletDappPageLike;
+  selectors: WalletDappPageDriverSelectors;
+}
+
 export interface WalletSignatureRequestInput {
   origin?: string;
   expectedAccount: string;
@@ -130,6 +151,24 @@ export interface ResetProfileResult {
   status: 'deleted' | 'skipped';
   profileDir: string;
   allowedProfileRoot: string;
+}
+
+export function createWalletDappPageDriver(options: WalletDappPageDriverOptions): WalletDappDriver {
+  const { page, selectors } = options;
+  return {
+    async requestConnect() {
+      await page.locator(selectors.connectButton).click();
+    },
+    async getConnectedAccount() {
+      return (await page.locator(selectors.connectedAccount).textContent())?.trim() || undefined;
+    },
+    async requestSignature() {
+      await page.locator(selectors.signMessageButton).click();
+    },
+    async requestTransaction() {
+      await page.locator(selectors.sendTransactionButton).click();
+    }
+  };
 }
 
 export async function connectWallet(options: ConnectWalletOptions): Promise<ConnectWalletResult> {
