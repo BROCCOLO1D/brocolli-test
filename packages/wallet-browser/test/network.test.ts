@@ -61,6 +61,8 @@ describe('Sepolia network config and normalization', () => {
     expect(isAllowedWalletChainId(31337)).toBe(true);
     expect(isAllowedWalletChainId(1337)).toBe(true);
     expect(isAllowedWalletChainId(1)).toBe(false);
+    expect(isAllowedWalletChainId('0xzz')).toBe(false);
+    expect(isAllowedWalletChainId('9007199254740992')).toBe(false);
   });
 
   it('resolves optional Sepolia RPC and assertion settings from injected env without requiring RPC', () => {

@@ -123,8 +123,12 @@ export function normalizeExpectedAccount(value: string | undefined): string {
 }
 
 export function isAllowedWalletChainId(value: string | number): boolean {
-  const chainId = normalizeChainId(value);
-  return DEFAULT_ALLOWED_WALLET_CHAIN_IDS.includes(chainId as (typeof DEFAULT_ALLOWED_WALLET_CHAIN_IDS)[number]);
+  try {
+    const chainId = normalizeChainId(value);
+    return DEFAULT_ALLOWED_WALLET_CHAIN_IDS.includes(chainId as (typeof DEFAULT_ALLOWED_WALLET_CHAIN_IDS)[number]);
+  } catch {
+    return false;
+  }
 }
 
 export function resolveSepoliaNetworkConfig(options: ResolveSepoliaNetworkConfigOptions = {}): SepoliaNetworkConfig {
