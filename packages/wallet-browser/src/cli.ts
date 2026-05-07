@@ -2,6 +2,7 @@
 import { prepareChromiumLaunchOptions } from './launcher.js';
 import { resolveWalletBrowserConfig, type WalletBrowserEnv } from './config.js';
 import { createMetaMaskOnboardingPlan, resolveMetaMaskOnboardingConfig } from './onboarding.js';
+import { createSepoliaNetworkPlan, resolveSepoliaNetworkConfig } from './network.js';
 
 export interface WalletBrowserCliOptions {
   argv?: string[];
@@ -25,11 +26,13 @@ interface WalletBrowserLaunchPlanJson {
 const USAGE = `Usage:
   wallet-browser prepare
   wallet-browser onboarding-plan
+  wallet-browser network-plan
 
 Print a sanitized Chromium persistent-context launch plan for the pinned MetaMask extension profile,
-or print a redacted MetaMask onboarding plan for the configured burner wallet.
-The prepare command does not launch Chromium. The onboarding-plan command validates onboarding inputs
-from injected environment/config and never prints raw private keys or wallet passwords.
+print a redacted MetaMask onboarding plan for the configured burner wallet, or print a
+redacted Sepolia network provisioning plan.
+The prepare command does not launch Chromium. Plan commands validate injected environment/config
+and never print raw private keys, wallet passwords, or RPC tokens.
 `;
 
 export async function runWalletBrowserCli(options: WalletBrowserCliOptions = {}): Promise<number> {
@@ -47,6 +50,18 @@ export async function runWalletBrowserCli(options: WalletBrowserCliOptions = {})
     try {
       const onboardingConfig = resolveMetaMaskOnboardingConfig({ env: options.env });
       const plan = createMetaMaskOnboardingPlan(onboardingConfig);
+      stdout(`${JSON.stringify(plan, null, 2)}\n`);
+      return 0;
+    } catch (error) {
+      stderr(`${error instanceof Error ? error.message : String(error)}\n`);
+      return 1;
+    }
+  }
+
+  if (command === 'network-plan') {
+    try {
+      const networkConfig = resolveSepoliaNetworkConfig({ env: options.env });
+      const plan = createSepoliaNetworkPlan(networkConfig);
       stdout(`${JSON.stringify(plan, null, 2)}\n`);
       return 0;
     } catch (error) {

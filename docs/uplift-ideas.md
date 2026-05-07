@@ -13,3 +13,4 @@ Append-only notes for potentially useful improvements discovered during autonomo
 - Add a selector-drift smoke test that opens the pinned MetaMask onboarding page and checks `METAMASK_ONBOARDING_SELECTORS` before any private key is entered.
 - Consider deriving the MetaMask extension ID from the persistent context service worker/background target so onboarding helpers do not require callers to pass it manually.
 - Add a future wait/assert helper after unlock that polls for an unlocked account UI marker before returning, so callers do not race the MetaMask transition after password submit.
+- Consider a future preflight that queries the configured Sepolia RPC for `eth_chainId` and compares it with `SEPOLIA_CHAIN_ID` before adding the network to MetaMask, with the response sanitized in logs.

@@ -16,6 +16,10 @@ export interface WalletBrowserEnv {
   METAMASK_PASSWORD?: string;
   METAMASK_ONBOARDING_TIMEOUT_MS?: string;
   METAMASK_ONBOARDING_DEBUG?: string;
+  SEPOLIA_CHAIN_ID?: string;
+  SEPOLIA_RPC_URL?: string;
+  METAMASK_NETWORK_ASSERTION_TIMEOUT_MS?: string;
+  METAMASK_NETWORK_DEBUG?: string;
 }
 
 export interface ResolveWalletBrowserConfigOptions {
