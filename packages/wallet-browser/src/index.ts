@@ -45,3 +45,29 @@ export {
   type RedactedMetaMaskOnboardingPlan,
   type ResolveMetaMaskOnboardingConfigOptions
 } from './onboarding.js';
+
+export {
+  DEFAULT_ALLOWED_WALLET_CHAIN_IDS,
+  DEFAULT_NETWORK_ASSERTION_TIMEOUT_MS,
+  DEFAULT_SEPOLIA_CHAIN_ID,
+  assertExpectedChainAndAccount,
+  chainIdToHex,
+  createMetaMaskNetworkPageDriver,
+  createSepoliaAddChainInput,
+  createSepoliaNetworkPlan,
+  isAllowedWalletChainId,
+  normalizeChainId,
+  normalizeExpectedAccount,
+  provisionSepoliaNetwork,
+  redactRpcUrl,
+  resolveSepoliaNetworkConfig,
+  validateOptionalRpcUrl,
+  type AddEthereumChainInput,
+  type MetaMaskNetworkDriver,
+  type MetaMaskNetworkPageDriverOptions,
+  type RedactedSepoliaNetworkPlan,
+  type ResolveSepoliaNetworkConfigOptions,
+  type SepoliaNetworkAssertionResult,
+  type SepoliaNetworkConfig,
+  type SepoliaNetworkEnv
+} from './network.js';

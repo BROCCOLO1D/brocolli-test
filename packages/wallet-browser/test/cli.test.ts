@@ -103,6 +103,72 @@ describe('runWalletBrowserCli', () => {
     expect(output).not.toContain(password);
   });
 
+  it('prints a redacted Sepolia network plan without requiring a MetaMask extension artifact or exposing RPC tokens', async () => {
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const rpcUrl = 'https://sepolia.infura.io/v3/super-secret-token';
+
+    const exitCode = await runWalletBrowserCli({
+      argv: ['network-plan'],
+      cwd: await tempRoot(),
+      env: {
+        SEPOLIA_WALLET_ADDRESS: '0x3333333333333333333333333333333333333333',
+        SEPOLIA_CHAIN_ID: '0xaa36a7',
+        SEPOLIA_RPC_URL: rpcUrl,
+        METAMASK_NETWORK_ASSERTION_TIMEOUT_MS: '45000',
+        METAMASK_NETWORK_DEBUG: 'true'
+      },
+      stdout: (message) => stdout.push(message),
+      stderr: (message) => stderr.push(message)
+    });
+
+    expect(exitCode).toBe(0);
+    expect(stderr).toEqual([]);
+    const output = stdout.join('');
+    const plan = JSON.parse(output) as {
+      status: string;
+      chainId: number;
+      chainIdHex: string;
+      expectedAccount: string;
+      rpcUrlConfigured: boolean;
+      rpcUrl: string;
+      timeoutMs: number;
+      debug: boolean;
+    };
+    expect(plan.status).toBe('pending');
+    expect(plan.chainId).toBe(11155111);
+    expect(plan.chainIdHex).toBe('0xaa36a7');
+    expect(plan.expectedAccount).toBe('0x3333333333333333333333333333333333333333');
+    expect(plan.rpcUrlConfigured).toBe(true);
+    expect(plan.rpcUrl).toBe('https://sepolia.infura.io/[redacted-url]');
+    expect(plan.timeoutMs).toBe(45000);
+    expect(plan.debug).toBe(true);
+    expect(output).not.toContain('super-secret-token');
+    expect(output).not.toContain(rpcUrl);
+  });
+
+  it('returns a non-zero exit code and concise error when network plan validation fails without echoing RPC tokens', async () => {
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const badRpcUrl = 'not-a-real-rpc-token-url';
+
+    const exitCode = await runWalletBrowserCli({
+      argv: ['network-plan'],
+      cwd: await tempRoot(),
+      env: {
+        SEPOLIA_WALLET_ADDRESS: '0x3333333333333333333333333333333333333333',
+        SEPOLIA_RPC_URL: badRpcUrl
+      },
+      stdout: (message) => stdout.push(message),
+      stderr: (message) => stderr.push(message)
+    });
+
+    expect(exitCode).toBe(1);
+    expect(stdout).toEqual([]);
+    expect(stderr.join('')).toContain('SEPOLIA_RPC_URL');
+    expect(stderr.join('')).not.toContain(badRpcUrl);
+  });
+
   it('returns a non-zero exit code and concise error when onboarding plan validation fails without echoing secrets', async () => {
     const stdout: string[] = [];
     const stderr: string[] = [];
