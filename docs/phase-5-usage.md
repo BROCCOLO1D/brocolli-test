@@ -9,6 +9,7 @@ Install and build from the repo root:
 ```bash
 pnpm install --frozen-lockfile
 pnpm fixture:test
+pnpm fixture:test:mocked-provider
 pnpm fixture:build
 ```
 
@@ -53,7 +54,9 @@ The selectors are also exported by `apps/fixture-dapp/src/fixture.ts` through `g
 
 `pnpm fixture:test` runs dependency-light Vitest coverage for stable selector exports, account/chain formatting, `personal_sign` params, and minimal transaction payload construction. These tests do not require MetaMask, a browser profile, a private key, an RPC URL, or Playwright traces.
 
-Future browser-level tests should inject a mock `window.ethereum` provider before page load, click the stable selectors, and assert the same request payloads without requiring real MetaMask. Real MetaMask approval tests should only run after the fixture behavior is stable under that mocked-provider path.
+`pnpm fixture:test:mocked-provider` runs a Playwright Chromium smoke test against the built static fixture. It injects a mock `window.ethereum` provider before page load, clicks the stable selectors, and asserts the exact `eth_requestAccounts`, `eth_chainId`, `personal_sign`, and `eth_sendTransaction` request payloads without requiring real MetaMask. The Playwright config disables trace, screenshot, and video capture for this fixture smoke path.
+
+Real MetaMask approval tests should only run after the fixture behavior is stable under this mocked-provider path.
 
 ## Acceptance for this slice
 
@@ -62,4 +65,5 @@ Future browser-level tests should inject a mock `window.ethereum` provider befor
 - The app uses direct EIP-1193 `window.ethereum.request` calls and no wallet SDKs.
 - Public UI state uses stable `data-testid` selectors suitable for Playwright automation.
 - Unit tests cover deterministic request payload construction and display formatting without touching secrets.
+- The mocked-provider Playwright smoke test exercises the full browser UI path without MetaMask and with trace/screenshot/video capture disabled.
 - Screenshots, traces, browser profiles, wallet extensions, and reports remain ignored/sensitive according to [security and artifact handling](security-and-artifacts.md).

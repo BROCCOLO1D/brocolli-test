@@ -13,6 +13,7 @@
     "typecheck": "pnpm -r typecheck",
     "fixture:build": "pnpm --filter @agent-browser-wallet/fixture-dapp build",
     "fixture:test": "pnpm --filter @agent-browser-wallet/fixture-dapp test",
+    "fixture:test:mocked-provider": "pnpm --filter @agent-browser-wallet/fixture-dapp test:mocked-provider",
     "fixture:serve": "pnpm --filter @agent-browser-wallet/fixture-dapp serve"
   },
   "devDependencies": {
