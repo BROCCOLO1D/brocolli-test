@@ -105,6 +105,7 @@ The package names are placeholders for layout planning, not an API commitment. P
 - README states the repository purpose, safety posture, Phase 1 scope, and near-term MVP path.
 - High-level goals remain a concise 10-milestone roadmap centered on MetaMask extension automation.
 - This runtime matrix documents supported MVP runtime, deferred surfaces, versioning/pinning policy, env placeholders, future layout, risks, and Phase 2 handoff.
+- [Phase 1 completion status](phase-1-completion.md) maps required deliverables to committed docs and identifies the recommended first Phase 2 task.
 - `.env.example` exists with only placeholder values and `.gitignore` still protects real env files.
 - Markdown links validate and whitespace checks pass.
 
