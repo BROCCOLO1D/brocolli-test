@@ -1,27 +1,38 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
 
 import { buildPersonalSignParams, buildValueTransaction, getFixtureSelectors } from '../src/fixture.js';
 
 const ACCOUNT = '0x1111111111111111111111111111111111111111';
 const CHAIN_ID = '0xaa36a7';
 const SIGNATURE = '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
-const TX_HASH = '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb';
+const TX_HASH = `0x${'bb'.repeat(32)}`;
 
-test('fixture dapp completes connect, sign, and transaction requests with an injected provider', async ({ page }) => {
-  const selectors = getFixtureSelectors();
+type RequestArgs = { method: string; params?: unknown[] | Record<string, unknown> };
 
+type FixtureWindow = typeof window & {
+  ethereum?: {
+    request(args: RequestArgs): Promise<unknown>;
+    on(event: string, listener: (...args: unknown[]) => void): void;
+  };
+  __fixtureProviderRequests?: RequestArgs[];
+};
+
+async function injectProvider(page: Page, chainId = CHAIN_ID): Promise<void> {
   await page.addInitScript(({ account, chainId, signature, txHash }) => {
     type RequestArgs = { method: string; params?: unknown[] | Record<string, unknown> };
     const requests: RequestArgs[] = [];
     const listeners = new Map<string, Array<(...args: unknown[]) => void>>();
+    const fixtureWindow = window as FixtureWindow;
+    let connected = false;
 
-    window.ethereum = {
+    fixtureWindow.ethereum = {
       async request(args: RequestArgs): Promise<unknown> {
         requests.push(args);
         if (args.method === 'eth_accounts') {
-          return [];
+          return connected ? [account] : [];
         }
         if (args.method === 'eth_requestAccounts') {
+          connected = true;
           return [account];
         }
         if (args.method === 'eth_chainId') {
@@ -39,8 +50,18 @@ test('fixture dapp completes connect, sign, and transaction requests with an inj
         listeners.set(event, [...(listeners.get(event) ?? []), listener]);
       }
     };
-    window.__fixtureProviderRequests = requests;
-  }, { account: ACCOUNT, chainId: CHAIN_ID, signature: SIGNATURE, txHash: TX_HASH });
+    fixtureWindow.__fixtureProviderRequests = requests;
+  }, { account: ACCOUNT, chainId, signature: SIGNATURE, txHash: TX_HASH });
+}
+
+async function getProviderRequests(page: Page): Promise<unknown> {
+  return page.evaluate(() => (window as FixtureWindow).__fixtureProviderRequests);
+}
+
+test('fixture dapp completes connect, sign, and transaction requests with an injected provider', async ({ page }) => {
+  const selectors = getFixtureSelectors();
+
+  await injectProvider(page);
 
   await page.goto('/');
   await expect(page.locator(selectors.statusOutput)).toContainText('Wallet provider detected');
@@ -55,12 +76,33 @@ test('fixture dapp completes connect, sign, and transaction requests with an inj
   await page.locator(selectors.sendTransactionButton).click();
   await expect(page.locator(selectors.sendTransactionStatus)).toContainText(`Transaction sent: ${TX_HASH.slice(0, 18)}...`);
 
-  await expect.poll(async () => page.evaluate(() => window.__fixtureProviderRequests)).toEqual([
+  await expect.poll(async () => getProviderRequests(page)).toEqual([
     { method: 'eth_accounts' },
     { method: 'eth_chainId' },
     { method: 'eth_requestAccounts' },
     { method: 'eth_chainId' },
     { method: 'personal_sign', params: buildPersonalSignParams(ACCOUNT) },
     { method: 'eth_sendTransaction', params: [buildValueTransaction({ from: ACCOUNT, chainId: CHAIN_ID })] }
+  ]);
+});
+
+test('fixture dapp refuses to prepare a transaction on unsupported chains', async ({ page }) => {
+  const selectors = getFixtureSelectors();
+
+  await injectProvider(page, '0x1');
+
+  await page.goto('/');
+  await page.locator(selectors.connectButton).click();
+  await expect(page.locator(selectors.currentChain)).toHaveText('Unknown chain (1 / 0x1)');
+
+  await page.locator(selectors.sendTransactionButton).click();
+  await expect(page.locator(selectors.sendTransactionStatus)).toContainText('Error: Unsupported fixture transaction chain: 0x1');
+  await expect(page.locator(selectors.statusOutput)).toContainText('Error: Unsupported fixture transaction chain: 0x1');
+
+  await expect.poll(async () => getProviderRequests(page)).toEqual([
+    { method: 'eth_accounts' },
+    { method: 'eth_chainId' },
+    { method: 'eth_requestAccounts' },
+    { method: 'eth_chainId' }
   ]);
 });

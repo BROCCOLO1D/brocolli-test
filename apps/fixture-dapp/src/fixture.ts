@@ -8,6 +8,7 @@ export const SEND_TRANSACTION_STATUS_TEST_ID = 'send-transaction-status';
 export const STATUS_OUTPUT_TEST_ID = 'status-output';
 
 export const DEFAULT_SIGN_MESSAGE = 'Fixture dapp sign-in';
+export const SUPPORTED_TRANSACTION_CHAIN_IDS = ['0xaa36a7', '0x7a69', '0x539'] as const;
 
 export interface FixtureSelectors {
   connectButton: string;
@@ -93,7 +94,20 @@ export function buildPersonalSignParams(account: string, message = DEFAULT_SIGN_
   return [utf8ToHex(message), account.toLowerCase()];
 }
 
+export function isSupportedTransactionChainId(chainId: string | number): boolean {
+  const hex = normalizeHexChainId(chainId);
+  return hex !== undefined && SUPPORTED_TRANSACTION_CHAIN_IDS.includes(hex as (typeof SUPPORTED_TRANSACTION_CHAIN_IDS)[number]);
+}
+
+export function assertSupportedTransactionChainId(chainId: string | number): void {
+  const hex = normalizeHexChainId(chainId);
+  if (!hex || !isSupportedTransactionChainId(hex)) {
+    throw new Error(`Unsupported fixture transaction chain: ${hex ?? 'unknown'}`);
+  }
+}
+
 export function buildValueTransaction(input: ValueTransactionInput): MinimalValueTransaction {
+  assertSupportedTransactionChainId(input.chainId);
   // This fixture intentionally sends a zero-value transaction back to the active account by default.
   // Wallet automation can validate prompt plumbing without transferring Sepolia funds.
   return {

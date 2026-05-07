@@ -97,11 +97,15 @@ async function sendTransaction(): Promise<void> {
   setStatus('Transaction request completed.');
 }
 
-function bindAction(selector: string, action: () => Promise<void>): void {
+function bindAction(selector: string, action: () => Promise<void>, errorStatusSelector?: string): void {
   query(selector).addEventListener('click', () => {
     action().catch((error: unknown) => {
       const message = error instanceof Error ? error.message : String(error);
-      setStatus(`Error: ${message}`);
+      const formatted = `Error: ${message}`;
+      setStatus(formatted);
+      if (errorStatusSelector) {
+        setText(errorStatusSelector, formatted);
+      }
     });
   });
 }
@@ -122,8 +126,8 @@ function bindProviderEvents(): void {
 
 function main(): void {
   bindAction(selectors.connectButton, connectWallet);
-  bindAction(selectors.signMessageButton, signMessage);
-  bindAction(selectors.sendTransactionButton, sendTransaction);
+  bindAction(selectors.signMessageButton, signMessage, selectors.signMessageStatus);
+  bindAction(selectors.sendTransactionButton, sendTransaction, selectors.sendTransactionStatus);
   bindProviderEvents();
   setText(selectors.connectedAccount, formatAccount(undefined));
   setText(selectors.currentChain, formatChainId(undefined));

@@ -29,7 +29,8 @@ The fixture supports the first deterministic dapp actions needed by wallet autom
 1. `eth_requestAccounts` to connect a wallet.
 2. `eth_accounts` and `eth_chainId` reads to display connected account and chain.
 3. `personal_sign` with a fixed UTF-8 message encoded as hex.
-4. `eth_sendTransaction` with a minimal zero-value transaction back to the connected account by default.
+4. Refuse transaction preparation unless the connected chain is Sepolia (`0xaa36a7`) or a common local devnet (`0x7a69`/`0x539`).
+5. `eth_sendTransaction` with a minimal zero-value transaction back to the connected account by default.
 
 The zero-value self-transaction is meant to exercise wallet prompt handling without intentionally moving Sepolia funds. Wallet automation must still assert the expected account, chain, dapp origin, and transaction fields before approving prompts.
 
@@ -65,5 +66,5 @@ Real MetaMask approval tests should only run after the fixture behavior is stabl
 - The app uses direct EIP-1193 `window.ethereum.request` calls and no wallet SDKs.
 - Public UI state uses stable `data-testid` selectors suitable for Playwright automation.
 - Unit tests cover deterministic request payload construction and display formatting without touching secrets.
-- The mocked-provider Playwright smoke test exercises the full browser UI path without MetaMask and with trace/screenshot/video capture disabled.
+- The mocked-provider Playwright smoke test exercises the full browser UI path without MetaMask, including the fail-closed unsupported-chain transaction path, and with trace/screenshot/video capture disabled.
 - Screenshots, traces, browser profiles, wallet extensions, and reports remain ignored/sensitive according to [security and artifact handling](security-and-artifacts.md).

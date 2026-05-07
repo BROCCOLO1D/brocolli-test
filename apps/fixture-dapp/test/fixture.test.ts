@@ -48,4 +48,13 @@ describe('fixture dapp helpers', () => {
       value: '0x0'
     });
   });
+
+  it('only prepares transactions on Sepolia or local devnet chains', () => {
+    expect(buildValueTransaction({ from: ACCOUNT, chainId: '0x7a69' })).toEqual({
+      from: ACCOUNT,
+      to: ACCOUNT,
+      value: '0x0'
+    });
+    expect(() => buildValueTransaction({ from: ACCOUNT, chainId: '0x1' })).toThrow(/unsupported fixture transaction chain/i);
+  });
 });
