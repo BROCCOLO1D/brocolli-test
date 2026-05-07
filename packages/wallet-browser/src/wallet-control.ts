@@ -1,0 +1,341 @@
+import { existsSync } from 'node:fs';
+import { rm } from 'node:fs/promises';
+import { relative, resolve, sep } from 'node:path';
+
+import {
+  assertExpectedChainAndAccount,
+  chainIdToHex,
+  normalizeChainId,
+  normalizeExpectedAccount,
+  provisionSepoliaNetwork,
+  redactRpcUrl,
+  type MetaMaskNetworkDriver,
+  type SepoliaNetworkAssertionResult,
+  type SepoliaNetworkConfig
+} from './network.js';
+
+export type WalletControlAction =
+  | 'connectWallet'
+  | 'approveSignature'
+  | 'approveTransaction'
+  | 'switchNetwork'
+  | 'assertWalletState'
+  | 'resetProfile';
+
+export type WalletControlLogStatus = 'started' | 'prompt-approved' | 'verified' | 'deleted' | 'skipped' | 'failed';
+
+export interface WalletControlLogEvent {
+  action: WalletControlAction;
+  status: WalletControlLogStatus;
+  origin?: string;
+  chainId?: number;
+  chainIdHex?: string;
+  account?: string;
+  promptType?: 'connect' | 'signature' | 'transaction';
+  metadata?: unknown;
+}
+
+export type WalletControlLogger = (event: WalletControlLogEvent) => void;
+
+export interface WalletDappDriver {
+  requestConnect(): Promise<void>;
+  getConnectedAccount(): Promise<string | undefined>;
+}
+
+export interface WalletConnectionPromptInput {
+  origin?: string;
+  expectedAccount: string;
+  expectedChainIdHex: string;
+}
+
+export interface WalletSignaturePromptInput {
+  origin?: string;
+  expectedAccount: string;
+  message?: string;
+}
+
+export interface WalletTransactionPromptInput {
+  origin?: string;
+  expectedAccount: string;
+  to?: string;
+  value?: string;
+}
+
+export interface WalletPromptDriver {
+  approveConnection?(input: WalletConnectionPromptInput): Promise<void>;
+  approveSignature?(input: WalletSignaturePromptInput): Promise<void>;
+  approveTransaction?(input: WalletTransactionPromptInput): Promise<void>;
+}
+
+export interface WalletStateOptions {
+  network: MetaMaskNetworkDriver;
+  expectedAccount: string;
+  expectedChainId: string | number;
+  logger?: WalletControlLogger;
+  metadata?: unknown;
+}
+
+export interface ConnectWalletOptions extends WalletStateOptions {
+  dapp: WalletDappDriver;
+  prompt: WalletPromptDriver;
+  origin?: string;
+}
+
+export type ConnectWalletResult = Omit<SepoliaNetworkAssertionResult, 'status'> & { status: 'connected' };
+
+export interface ApproveSignatureOptions {
+  prompt: WalletPromptDriver;
+  origin?: string;
+  expectedAccount: string;
+  message?: string;
+  logger?: WalletControlLogger;
+  metadata?: unknown;
+}
+
+export interface ApproveTransactionOptions {
+  prompt: WalletPromptDriver;
+  origin?: string;
+  expectedAccount: string;
+  to?: string;
+  value?: string;
+  logger?: WalletControlLogger;
+  metadata?: unknown;
+}
+
+export interface ResetProfileOptions {
+  profileDir: string;
+  allowedProfileRoot?: string;
+  logger?: WalletControlLogger;
+  metadata?: unknown;
+}
+
+export interface ResetProfileResult {
+  status: 'deleted' | 'skipped';
+  profileDir: string;
+  allowedProfileRoot: string;
+}
+
+export async function connectWallet(options: ConnectWalletOptions): Promise<ConnectWalletResult> {
+  const config = createWalletStateConfig(options);
+  logWalletControl(options.logger, {
+    action: 'connectWallet',
+    status: 'started',
+    origin: options.origin,
+    chainId: config.chainId,
+    chainIdHex: config.chainIdHex,
+    account: config.expectedAccount,
+    promptType: 'connect',
+    metadata: options.metadata
+  });
+
+  await options.dapp.requestConnect();
+  if (!options.prompt.approveConnection) {
+    throw new Error('MetaMask connection prompt approval is not implemented for the provided prompt driver; fail closed.');
+  }
+  await options.prompt.approveConnection({
+    origin: options.origin,
+    expectedAccount: config.expectedAccount,
+    expectedChainIdHex: config.chainIdHex
+  });
+  logWalletControl(options.logger, {
+    action: 'connectWallet',
+    status: 'prompt-approved',
+    origin: options.origin,
+    chainId: config.chainId,
+    chainIdHex: config.chainIdHex,
+    account: config.expectedAccount,
+    promptType: 'connect',
+    metadata: options.metadata
+  });
+
+  const connectedAccount = normalizeExpectedAccount(await options.dapp.getConnectedAccount());
+  if (connectedAccount !== config.expectedAccount) {
+    throw new Error(`Dapp connected account ${connectedAccount} does not match expected ${config.expectedAccount}.`);
+  }
+
+  const state = await assertExpectedChainAndAccount(config, options.network);
+  logWalletControl(options.logger, {
+    action: 'connectWallet',
+    status: 'verified',
+    origin: options.origin,
+    chainId: state.chainId,
+    chainIdHex: state.chainIdHex,
+    account: state.activeAccount,
+    promptType: 'connect',
+    metadata: options.metadata
+  });
+
+  return { ...state, status: 'connected' };
+}
+
+export async function approveSignature(options: ApproveSignatureOptions): Promise<void> {
+  const expectedAccount = normalizeExpectedAccount(options.expectedAccount);
+  logWalletControl(options.logger, {
+    action: 'approveSignature',
+    status: 'started',
+    origin: options.origin,
+    account: expectedAccount,
+    promptType: 'signature',
+    metadata: options.metadata
+  });
+  if (!options.prompt.approveSignature) {
+    throw new Error('MetaMask signature prompt approval is not implemented for the provided prompt driver; fail closed.');
+  }
+  await options.prompt.approveSignature({ origin: options.origin, expectedAccount, message: options.message });
+  logWalletControl(options.logger, {
+    action: 'approveSignature',
+    status: 'prompt-approved',
+    origin: options.origin,
+    account: expectedAccount,
+    promptType: 'signature',
+    metadata: options.metadata
+  });
+}
+
+export async function approveTransaction(options: ApproveTransactionOptions): Promise<void> {
+  const expectedAccount = normalizeExpectedAccount(options.expectedAccount);
+  logWalletControl(options.logger, {
+    action: 'approveTransaction',
+    status: 'started',
+    origin: options.origin,
+    account: expectedAccount,
+    promptType: 'transaction',
+    metadata: options.metadata
+  });
+  if (!options.prompt.approveTransaction) {
+    throw new Error('MetaMask transaction prompt approval is not implemented for the provided prompt driver; fail closed.');
+  }
+  await options.prompt.approveTransaction({
+    origin: options.origin,
+    expectedAccount,
+    to: options.to ? normalizeExpectedAccount(options.to) : undefined,
+    value: options.value
+  });
+  logWalletControl(options.logger, {
+    action: 'approveTransaction',
+    status: 'prompt-approved',
+    origin: options.origin,
+    account: expectedAccount,
+    promptType: 'transaction',
+    metadata: options.metadata
+  });
+}
+
+export async function switchNetwork(options: WalletStateOptions): Promise<SepoliaNetworkAssertionResult> {
+  const config = createWalletStateConfig(options);
+  logWalletControl(options.logger, {
+    action: 'switchNetwork',
+    status: 'started',
+    chainId: config.chainId,
+    chainIdHex: config.chainIdHex,
+    account: config.expectedAccount,
+    metadata: options.metadata
+  });
+  const result = await provisionSepoliaNetwork(config, options.network);
+  logWalletControl(options.logger, {
+    action: 'switchNetwork',
+    status: 'verified',
+    chainId: result.chainId,
+    chainIdHex: result.chainIdHex,
+    account: result.activeAccount,
+    metadata: options.metadata
+  });
+  return result;
+}
+
+export async function assertWalletState(options: WalletStateOptions): Promise<SepoliaNetworkAssertionResult> {
+  const config = createWalletStateConfig(options);
+  logWalletControl(options.logger, {
+    action: 'assertWalletState',
+    status: 'started',
+    chainId: config.chainId,
+    chainIdHex: config.chainIdHex,
+    account: config.expectedAccount,
+    metadata: options.metadata
+  });
+  const result = await assertExpectedChainAndAccount(config, options.network);
+  logWalletControl(options.logger, {
+    action: 'assertWalletState',
+    status: 'verified',
+    chainId: result.chainId,
+    chainIdHex: result.chainIdHex,
+    account: result.activeAccount,
+    metadata: options.metadata
+  });
+  return result;
+}
+
+export async function resetProfile(options: ResetProfileOptions): Promise<ResetProfileResult> {
+  const profileDir = resolve(options.profileDir);
+  const allowedProfileRoot = resolve(options.allowedProfileRoot ?? '.wallet-profiles');
+  assertProfileDirIsSafe(profileDir, allowedProfileRoot);
+
+  if (!existsSync(profileDir)) {
+    const result = { status: 'skipped' as const, profileDir, allowedProfileRoot };
+    logWalletControl(options.logger, { action: 'resetProfile', status: 'skipped', metadata: options.metadata });
+    return result;
+  }
+
+  await rm(profileDir, { recursive: true, force: true });
+  const result = { status: 'deleted' as const, profileDir, allowedProfileRoot };
+  logWalletControl(options.logger, { action: 'resetProfile', status: 'deleted', metadata: options.metadata });
+  return result;
+}
+
+function createWalletStateConfig(options: WalletStateOptions): SepoliaNetworkConfig {
+  const chainId = normalizeChainId(options.expectedChainId);
+  return {
+    chainId,
+    chainIdHex: chainIdToHex(chainId),
+    expectedAccount: normalizeExpectedAccount(options.expectedAccount),
+    timeoutMs: 30_000,
+    debug: false
+  };
+}
+
+function assertProfileDirIsSafe(profileDir: string, allowedProfileRoot: string): void {
+  const rel = relative(allowedProfileRoot, profileDir);
+  if (rel === '' || rel === '..' || rel.startsWith(`..${sep}`) || rel.includes(`${sep}..${sep}`)) {
+    throw new Error(`Refusing to reset wallet profile outside allowed wallet profile root: ${profileDir}`);
+  }
+}
+
+function logWalletControl(logger: WalletControlLogger | undefined, event: WalletControlLogEvent): void {
+  if (!logger) {
+    return;
+  }
+  logger(sanitizeLogEvent(event) as WalletControlLogEvent);
+}
+
+function sanitizeLogEvent(event: WalletControlLogEvent): unknown {
+  return redactStructuredValue(event);
+}
+
+function redactStructuredValue(value: unknown): unknown {
+  if (typeof value === 'string') {
+    return redactString(value);
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => redactStructuredValue(item));
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value as Record<string, unknown>).map(([key, innerValue]) => [
+        key,
+        isSensitiveKey(key) ? '[redacted]' : redactStructuredValue(innerValue)
+      ])
+    );
+  }
+  return value;
+}
+
+function redactString(value: string): string {
+  return value
+    .replace(/0x[a-fA-F0-9]{64}/g, '[redacted:private-key]')
+    .replace(/\b[a-fA-F0-9]{64}\b/g, '[redacted:private-key]')
+    .replace(/https?:\/\/[^\s)"']+/gi, (match) => redactRpcUrl(match));
+}
+
+function isSensitiveKey(key: string): boolean {
+  return /seed|phrase|password|token|secret/i.test(key);
+}

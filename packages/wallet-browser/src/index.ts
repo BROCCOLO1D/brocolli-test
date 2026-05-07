@@ -71,3 +71,28 @@ export {
   type SepoliaNetworkConfig,
   type SepoliaNetworkEnv
 } from './network.js';
+
+export {
+  approveSignature,
+  approveTransaction,
+  assertWalletState,
+  connectWallet,
+  resetProfile,
+  switchNetwork,
+  type ApproveSignatureOptions,
+  type ApproveTransactionOptions,
+  type ConnectWalletOptions,
+  type ConnectWalletResult,
+  type ResetProfileOptions,
+  type ResetProfileResult,
+  type WalletConnectionPromptInput,
+  type WalletControlAction,
+  type WalletControlLogEvent,
+  type WalletControlLogStatus,
+  type WalletControlLogger,
+  type WalletDappDriver,
+  type WalletPromptDriver,
+  type WalletSignaturePromptInput,
+  type WalletStateOptions,
+  type WalletTransactionPromptInput
+} from './wallet-control.js';
