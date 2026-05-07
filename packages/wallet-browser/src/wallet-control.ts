@@ -40,6 +40,21 @@ export type WalletControlLogger = (event: WalletControlLogEvent) => void;
 export interface WalletDappDriver {
   requestConnect(): Promise<void>;
   getConnectedAccount(): Promise<string | undefined>;
+  requestSignature?(input: WalletSignatureRequestInput): Promise<void>;
+  requestTransaction?(input: WalletTransactionRequestInput): Promise<void>;
+}
+
+export interface WalletSignatureRequestInput {
+  origin?: string;
+  expectedAccount: string;
+  message?: string;
+}
+
+export interface WalletTransactionRequestInput {
+  origin?: string;
+  expectedAccount: string;
+  to?: string;
+  value?: string;
 }
 
 export interface WalletConnectionPromptInput {
@@ -85,6 +100,7 @@ export type ConnectWalletResult = Omit<SepoliaNetworkAssertionResult, 'status'> 
 
 export interface ApproveSignatureOptions {
   prompt: WalletPromptDriver;
+  dapp?: Pick<WalletDappDriver, 'requestSignature'>;
   origin?: string;
   expectedAccount: string;
   message?: string;
@@ -94,6 +110,7 @@ export interface ApproveSignatureOptions {
 
 export interface ApproveTransactionOptions {
   prompt: WalletPromptDriver;
+  dapp?: Pick<WalletDappDriver, 'requestTransaction'>;
   origin?: string;
   expectedAccount: string;
   to?: string;
@@ -181,6 +198,9 @@ export async function approveSignature(options: ApproveSignatureOptions): Promis
   if (!options.prompt.approveSignature) {
     throw new Error('MetaMask signature prompt approval is not implemented for the provided prompt driver; fail closed.');
   }
+  if (options.dapp?.requestSignature) {
+    await options.dapp.requestSignature({ origin: options.origin, expectedAccount, message: options.message });
+  }
   await options.prompt.approveSignature({ origin: options.origin, expectedAccount, message: options.message });
   logWalletControl(options.logger, {
     action: 'approveSignature',
@@ -204,6 +224,14 @@ export async function approveTransaction(options: ApproveTransactionOptions): Pr
   });
   if (!options.prompt.approveTransaction) {
     throw new Error('MetaMask transaction prompt approval is not implemented for the provided prompt driver; fail closed.');
+  }
+  if (options.dapp?.requestTransaction) {
+    await options.dapp.requestTransaction({
+      origin: options.origin,
+      expectedAccount,
+      to: options.to ? normalizeExpectedAccount(options.to) : undefined,
+      value: options.value
+    });
   }
   await options.prompt.approveTransaction({
     origin: options.origin,

@@ -119,23 +119,35 @@ describe('wallet-control helpers', () => {
     await expect(approveTransaction({ prompt: {}, origin: 'https://fixture.example', expectedAccount: ADDRESS, to: ADDRESS, value: '0x0' })).rejects.toThrow(/not implemented|fail closed/i);
   });
 
-  it('approves signature and transaction prompts only through explicit prompt driver methods', async () => {
+  it('sequences dapp signature and transaction requests before explicit prompt driver approvals', async () => {
     const calls: string[] = [];
+    const dapp: WalletDappDriver = {
+      async requestConnect() {},
+      async getConnectedAccount() { return ADDRESS; },
+      async requestSignature(input) {
+        calls.push(`dapp:signature:${input.message}`);
+      },
+      async requestTransaction(input) {
+        calls.push(`dapp:transaction:${input.to}:${input.value}`);
+      }
+    };
     const prompt: WalletPromptDriver = {
       async approveSignature(input) {
-        calls.push(`signature:${input.origin}:${input.expectedAccount}:${input.message}`);
+        calls.push(`prompt:signature:${input.origin}:${input.expectedAccount}:${input.message}`);
       },
       async approveTransaction(input) {
-        calls.push(`transaction:${input.origin}:${input.to}:${input.value}`);
+        calls.push(`prompt:transaction:${input.origin}:${input.to}:${input.value}`);
       }
     };
 
-    await approveSignature({ prompt, origin: 'https://fixture.example', expectedAccount: ADDRESS, message: 'hello' });
-    await approveTransaction({ prompt, origin: 'https://fixture.example', expectedAccount: ADDRESS, to: ADDRESS, value: '0x0' });
+    await approveSignature({ dapp, prompt, origin: 'https://fixture.example', expectedAccount: ADDRESS, message: 'hello' });
+    await approveTransaction({ dapp, prompt, origin: 'https://fixture.example', expectedAccount: ADDRESS, to: ADDRESS, value: '0x0' });
 
     expect(calls).toEqual([
-      `signature:https://fixture.example:${ADDRESS}:hello`,
-      `transaction:https://fixture.example:${ADDRESS}:0x0`
+      'dapp:signature:hello',
+      `prompt:signature:https://fixture.example:${ADDRESS}:hello`,
+      `dapp:transaction:${ADDRESS}:0x0`,
+      `prompt:transaction:https://fixture.example:${ADDRESS}:0x0`
     ]);
   });
 });

@@ -93,6 +93,8 @@ export {
   type WalletDappDriver,
   type WalletPromptDriver,
   type WalletSignaturePromptInput,
+  type WalletSignatureRequestInput,
   type WalletStateOptions,
-  type WalletTransactionPromptInput
+  type WalletTransactionPromptInput,
+  type WalletTransactionRequestInput
 } from './wallet-control.js';

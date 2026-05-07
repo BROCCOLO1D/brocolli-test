@@ -17,7 +17,7 @@ import {
 
 The helper module composes the earlier launcher/config, onboarding, and network layers through typed driver boundaries:
 
-- `WalletDappDriver` initiates dapp-side requests such as `eth_requestAccounts` and reads the connected account.
+- `WalletDappDriver` initiates dapp-side requests such as `eth_requestAccounts`, optional signature requests, optional transaction requests, and reads the connected account.
 - `WalletPromptDriver` owns MetaMask prompt approval methods. Missing signature or transaction approval methods fail closed instead of guessing at extension UI state.
 - `MetaMaskNetworkDriver` is reused from Phase 4 for chain/account assertions and Sepolia switching.
 - `WalletControlLogger` receives sanitized structured events for helper lifecycle and prompt decisions.
@@ -52,7 +52,7 @@ const result = await connectWallet({
 
 ## Fail-closed prompt placeholders
 
-`approveSignature()` and `approveTransaction()` require explicit prompt-driver methods. If a driver does not implement the relevant prompt approval method, the helper rejects with a fail-closed error. This keeps future real MetaMask selector work behind a stable API without silently approving unknown UI states.
+`approveSignature()` and `approveTransaction()` can optionally initiate the dapp-side request first when a `dapp` driver with `requestSignature()` or `requestTransaction()` is supplied, then they require the matching prompt-driver approval method. If a driver does not implement the relevant prompt approval method, the helper rejects with a fail-closed error. This keeps future real MetaMask selector work behind a stable API without silently approving unknown UI states.
 
 ## Network and state helpers
 
