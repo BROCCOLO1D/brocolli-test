@@ -104,6 +104,7 @@ describe('wallet-control helpers', () => {
       expectedAccount: ADDRESS,
       expectedChainId: DEFAULT_SEPOLIA_CHAIN_ID,
       origin: 'https://fixture.example/connect/path?session=sensitive-session#fragment',
+      guardrails: { allowedOrigins: ['https://fixture.example/connect/path'] },
       logger: (event) => events.push(event),
       metadata: { rpcUrl: RPC_WITH_CREDENTIAL }
     });
@@ -113,6 +114,32 @@ describe('wallet-control helpers', () => {
     expect(serialized).not.toContain('sensitive-session');
     expect(serialized).not.toContain('super-secret-token');
     expect(serialized).toContain('https://sepolia.infura.io/[redacted-url]');
+  });
+
+  it('fails closed on connect from an origin outside the configured allowlist before dapp or prompt actions', async () => {
+    const calls: string[] = [];
+    const events: WalletControlLogEvent[] = [];
+    const dapp: WalletDappDriver = {
+      async requestConnect() { calls.push('dapp:connect'); },
+      async getConnectedAccount() { return ADDRESS; }
+    };
+    const prompt: WalletPromptDriver = { async approveConnection() { calls.push('prompt:connect'); } };
+
+    await expect(connectWallet({
+      dapp,
+      prompt,
+      network: makeNetworkDriver(),
+      expectedAccount: ADDRESS,
+      expectedChainId: DEFAULT_SEPOLIA_CHAIN_ID,
+      origin: 'https://evil.example/connect?session=sensitive-session',
+      guardrails: { allowedOrigins: ['https://fixture.example/connect'] },
+      logger: (event) => events.push(event)
+    })).rejects.toThrow(/dapp origin.*not allowed/i);
+
+    expect(calls).toEqual([]);
+    expect(events.map((event) => event.decision)).toEqual(['pending', 'rejected']);
+    expect(events[1]).toMatchObject({ status: 'failed', origin: 'https://evil.example/connect', decision: 'rejected' });
+    expect(JSON.stringify(events)).not.toContain('sensitive-session');
   });
 
   it('fails closed and logs sanitized connect failures when dapp account state is unexpected', async () => {
@@ -323,6 +350,32 @@ describe('wallet-control helpers', () => {
       valueWei: '1',
       decision: 'rejected'
     });
+  });
+
+  it('fails closed on transaction target outside the configured allowlist before dapp or prompt approval', async () => {
+    const calls: string[] = [];
+    const events: WalletControlLogEvent[] = [];
+    const dapp: WalletDappDriver = {
+      async requestConnect() {},
+      async getConnectedAccount() { return ADDRESS; },
+      async requestTransaction() { calls.push('dapp:transaction'); }
+    };
+    const prompt: WalletPromptDriver = { async approveTransaction() { calls.push('prompt:transaction'); } };
+
+    await expect(approveTransaction({
+      dapp,
+      prompt,
+      origin: 'https://fixture.example',
+      expectedAccount: ADDRESS,
+      to: OTHER_ADDRESS,
+      value: '0x0',
+      guardrails: { allowedTargets: [ADDRESS] },
+      logger: (event) => events.push(event)
+    })).rejects.toThrow(/transaction target.*not allowed/i);
+
+    expect(calls).toEqual([]);
+    expect(events.map((event) => event.decision)).toEqual(['pending', 'rejected']);
+    expect(events[1]).toMatchObject({ status: 'failed', target: OTHER_ADDRESS, valueWei: '0', decision: 'rejected' });
   });
 
   it('allows a low non-zero Sepolia fixture value only when explicitly capped above zero', async () => {
