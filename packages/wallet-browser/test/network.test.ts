@@ -4,6 +4,7 @@ import {
   DEFAULT_NETWORK_ASSERTION_TIMEOUT_MS,
   DEFAULT_SEPOLIA_CHAIN_ID,
   assertExpectedChainAndAccount,
+  createMetaMaskNetworkPageDriver,
   createSepoliaNetworkPlan,
   isAllowedWalletChainId,
   normalizeChainId,
@@ -157,5 +158,51 @@ describe('Sepolia network assertions and mockable MetaMask driver', () => {
 
     expect(config.timeoutMs).toBe(DEFAULT_NETWORK_ASSERTION_TIMEOUT_MS);
     expect(config.debug).toBe(false);
+  });
+});
+
+describe('MetaMask EIP-1193 page network driver', () => {
+  it('bridges network reads and Sepolia switch/add requests through window.ethereum.request', async () => {
+    const calls: Array<{ method: string; params?: unknown[] }> = [];
+    const page = {
+      async evaluate(fn: (request: { method: string; params?: unknown[] }) => unknown, request: { method: string; params?: unknown[] }) {
+        calls.push(request);
+        if (request.method === 'eth_chainId') {
+          return '0xaa36a7';
+        }
+        if (request.method === 'eth_accounts') {
+          return [ADDRESS];
+        }
+        return undefined;
+      }
+    };
+    const driver = createMetaMaskNetworkPageDriver({ page: page as never });
+
+    await expect(driver.getChainId()).resolves.toBe('0xaa36a7');
+    await expect(driver.getAccounts()).resolves.toEqual([ADDRESS]);
+    await expect(driver.switchChain('0xaa36a7')).resolves.toBeUndefined();
+    await expect(driver.addEthereumChain({
+      chainId: '0xaa36a7',
+      chainName: 'Sepolia',
+      rpcUrls: [RPC_WITH_TOKEN],
+      nativeCurrency: { name: 'Sepolia Ether', symbol: 'ETH', decimals: 18 },
+      blockExplorerUrls: ['https://sepolia.etherscan.io']
+    })).resolves.toBeUndefined();
+
+    expect(calls).toEqual([
+      { method: 'eth_chainId' },
+      { method: 'eth_accounts' },
+      { method: 'wallet_switchEthereumChain', params: [{ chainId: '0xaa36a7' }] },
+      {
+        method: 'wallet_addEthereumChain',
+        params: [{
+          chainId: '0xaa36a7',
+          chainName: 'Sepolia',
+          rpcUrls: [RPC_WITH_TOKEN],
+          nativeCurrency: { name: 'Sepolia Ether', symbol: 'ETH', decimals: 18 },
+          blockExplorerUrls: ['https://sepolia.etherscan.io']
+        }]
+      }
+    ]);
   });
 });

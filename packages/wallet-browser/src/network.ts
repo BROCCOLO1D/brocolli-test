@@ -242,21 +242,48 @@ export function createSepoliaAddChainInput(config: SepoliaNetworkConfig): AddEth
   };
 }
 
-export function createMetaMaskNetworkPageDriver(_options: MetaMaskNetworkPageDriverOptions): MetaMaskNetworkDriver {
+interface EthereumRequestInput {
+  method: string;
+  params?: unknown[];
+}
+
+interface Eip1193Provider {
+  request(input: EthereumRequestInput): Promise<unknown>;
+}
+
+export function createMetaMaskNetworkPageDriver(options: MetaMaskNetworkPageDriverOptions): MetaMaskNetworkDriver {
   return {
     async getChainId() {
-      throw new Error('MetaMask page chain-id inspection is not implemented yet; use a MetaMaskNetworkDriver mock until selectors are wired.');
+      const result = await requestEthereum(options.page, { method: 'eth_chainId' });
+      if (typeof result !== 'string' && typeof result !== 'number') {
+        throw new Error('MetaMask returned an invalid eth_chainId response.');
+      }
+      return result;
     },
     async getAccounts() {
-      throw new Error('MetaMask page account inspection is not implemented yet; use a MetaMaskNetworkDriver mock until selectors are wired.');
+      const result = await requestEthereum(options.page, { method: 'eth_accounts' });
+      if (!Array.isArray(result) || !result.every((value) => typeof value === 'string')) {
+        throw new Error('MetaMask returned an invalid eth_accounts response.');
+      }
+      return result;
     },
-    async switchChain() {
-      throw new Error('MetaMask page network switching is not implemented yet; use a MetaMaskNetworkDriver mock until selectors are wired.');
+    async switchChain(chainIdHex) {
+      await requestEthereum(options.page, { method: 'wallet_switchEthereumChain', params: [{ chainId: chainIdHex }] });
     },
-    async addEthereumChain() {
-      throw new Error('MetaMask page add-network automation is not implemented yet; use a MetaMaskNetworkDriver mock until selectors are wired.');
+    async addEthereumChain(input) {
+      await requestEthereum(options.page, { method: 'wallet_addEthereumChain', params: [input] });
     }
   };
+}
+
+async function requestEthereum(page: Page, request: EthereumRequestInput): Promise<unknown> {
+  return page.evaluate(async (input) => {
+    const maybeProvider = (globalThis as { ethereum?: Eip1193Provider }).ethereum;
+    if (!maybeProvider?.request) {
+      throw new Error('window.ethereum.request is not available on the selected MetaMask page.');
+    }
+    return maybeProvider.request(input);
+  }, request);
 }
 
 function resolveNetworkTimeoutMs(explicit: number | undefined, envValue: string | undefined): number {

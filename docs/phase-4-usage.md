@@ -30,11 +30,11 @@ const networkConfig = resolveSepoliaNetworkConfig({ env: process.env });
 const plan = createSepoliaNetworkPlan(networkConfig);
 console.log(JSON.stringify(plan)); // RPC URL is sanitized.
 
-await provisionSepoliaNetwork(driver, networkConfig);
-await assertExpectedChainAndAccount(driver, networkConfig);
+await provisionSepoliaNetwork(networkConfig, driver);
+await assertExpectedChainAndAccount(networkConfig, driver);
 ```
 
-The driver is intentionally small and mockable: it needs chain/account reads plus switch/add-chain operations. MetaMask Playwright page helpers are exported as signatures for wiring real extension UI automation once the pinned extension pages are verified.
+The driver is intentionally small and mockable: it needs chain/account reads plus switch/add-chain operations. `createMetaMaskNetworkPageDriver({ page })` now provides an EIP-1193 bridge for already-open wallet/dapp pages with `window.ethereum.request`; extension UI selector automation can still be layered on top once pinned MetaMask pages are verified.
 
 ## CLI network plan
 
