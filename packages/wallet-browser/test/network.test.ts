@@ -40,6 +40,12 @@ describe('Sepolia network config and normalization', () => {
     expect(() => normalizeChainId('1.5')).toThrow(/chain id/i);
   });
 
+  it('fails closed on chain ids outside JavaScript safe-integer range', () => {
+    expect(() => normalizeChainId(Number.MAX_SAFE_INTEGER + 1)).toThrow(/safe integer/i);
+    expect(() => normalizeChainId('9007199254740992')).toThrow(/safe integer/i);
+    expect(() => normalizeChainId('0x20000000000000')).toThrow(/safe integer/i);
+  });
+
   it('normalizes expected accounts and validates allowed Sepolia/local chain ids', () => {
     expect(normalizeExpectedAccount(ADDRESS.toUpperCase())).toBe(ADDRESS);
     expect(() => normalizeExpectedAccount('0x1234')).toThrow(/SEPOLIA_WALLET_ADDRESS/);

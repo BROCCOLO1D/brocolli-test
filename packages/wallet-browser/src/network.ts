@@ -81,7 +81,7 @@ export function normalizeChainId(value: string | number | undefined): number {
     if (!Number.isInteger(value) || value <= 0) {
       throw new Error('Chain id must be a positive integer.');
     }
-    return value;
+    return validateSafeChainId(value);
   }
 
   const trimmed = value?.trim();
@@ -90,11 +90,11 @@ export function normalizeChainId(value: string | number | undefined): number {
   }
 
   if (/^0x[0-9a-fA-F]+$/.test(trimmed)) {
-    return Number.parseInt(trimmed, 16);
+    return validateSafeChainId(Number.parseInt(trimmed, 16));
   }
 
   if (/^[0-9]+$/.test(trimmed)) {
-    return Number.parseInt(trimmed, 10);
+    return validateSafeChainId(Number.parseInt(trimmed, 10));
   }
 
   throw new Error('Chain id must be a decimal integer or 0x-prefixed hexadecimal value.');
@@ -102,6 +102,13 @@ export function normalizeChainId(value: string | number | undefined): number {
 
 export function chainIdToHex(chainId: number): string {
   return `0x${chainId.toString(16)}`;
+}
+
+function validateSafeChainId(chainId: number): number {
+  if (!Number.isSafeInteger(chainId)) {
+    throw new Error('Chain id must be within JavaScript safe integer range.');
+  }
+  return chainId;
 }
 
 export function normalizeExpectedAccount(value: string | undefined): string {
