@@ -31,6 +31,9 @@ export interface WalletControlLogEvent {
   chainId?: number;
   chainIdHex?: string;
   account?: string;
+  target?: string;
+  valueWei?: string;
+  decision?: 'pending' | 'approved' | 'rejected';
   promptType?: 'connect' | 'signature' | 'transaction';
   metadata?: unknown;
 }
@@ -97,6 +100,12 @@ export interface WalletTransactionPromptInput {
   value?: string;
 }
 
+export interface WalletGuardrailConfig {
+  maxTransactionValueWei?: string | number | bigint;
+  allowedOrigins?: readonly string[];
+  allowedTargets?: readonly string[];
+}
+
 export interface WalletPromptDriver {
   approveConnection?(input: WalletConnectionPromptInput): Promise<void>;
   approveSignature?(input: WalletSignaturePromptInput): Promise<void>;
@@ -115,6 +124,7 @@ export interface ConnectWalletOptions extends WalletStateOptions {
   dapp: WalletDappDriver;
   prompt: WalletPromptDriver;
   origin?: string;
+  guardrails?: WalletGuardrailConfig;
 }
 
 export type ConnectWalletResult = Omit<SepoliaNetworkAssertionResult, 'status'> & { status: 'connected' };
@@ -124,7 +134,10 @@ export interface ApproveSignatureOptions {
   dapp?: Pick<WalletDappDriver, 'requestSignature'>;
   origin?: string;
   expectedAccount: string;
+  expectedChainId?: string | number;
+  network?: MetaMaskNetworkDriver;
   message?: string;
+  guardrails?: WalletGuardrailConfig;
   logger?: WalletControlLogger;
   metadata?: unknown;
 }
@@ -134,8 +147,11 @@ export interface ApproveTransactionOptions {
   dapp?: Pick<WalletDappDriver, 'requestTransaction'>;
   origin?: string;
   expectedAccount: string;
+  expectedChainId?: string | number;
+  network?: MetaMaskNetworkDriver;
   to?: string;
   value?: string;
+  guardrails?: WalletGuardrailConfig;
   logger?: WalletControlLogger;
   metadata?: unknown;
 }
@@ -180,11 +196,13 @@ export async function connectWallet(options: ConnectWalletOptions): Promise<Conn
     chainId: config.chainId,
     chainIdHex: config.chainIdHex,
     account: config.expectedAccount,
+    decision: 'pending',
     promptType: 'connect',
     metadata: options.metadata
   });
 
   try {
+    assertAllowedOrigin(options.origin, options.guardrails);
     await options.dapp.requestConnect();
     if (!options.prompt.approveConnection) {
       throw new Error('MetaMask connection prompt approval is not implemented for the provided prompt driver; fail closed.');
@@ -201,6 +219,7 @@ export async function connectWallet(options: ConnectWalletOptions): Promise<Conn
       chainId: config.chainId,
       chainIdHex: config.chainIdHex,
       account: config.expectedAccount,
+      decision: 'approved',
       promptType: 'connect',
       metadata: options.metadata
     });
@@ -218,6 +237,7 @@ export async function connectWallet(options: ConnectWalletOptions): Promise<Conn
       chainId: state.chainId,
       chainIdHex: state.chainIdHex,
       account: state.activeAccount,
+      decision: 'approved',
       promptType: 'connect',
       metadata: options.metadata
     });
@@ -231,6 +251,7 @@ export async function connectWallet(options: ConnectWalletOptions): Promise<Conn
       chainId: config.chainId,
       chainIdHex: config.chainIdHex,
       account: config.expectedAccount,
+      decision: 'rejected',
       promptType: 'connect',
       metadata: createFailureMetadata(options.metadata, error)
     });
@@ -240,18 +261,26 @@ export async function connectWallet(options: ConnectWalletOptions): Promise<Conn
 
 export async function approveSignature(options: ApproveSignatureOptions): Promise<void> {
   const expectedAccount = normalizeExpectedAccount(options.expectedAccount);
+  const stateConfig = createOptionalWalletStateConfig(options);
   logWalletControl(options.logger, {
     action: 'approveSignature',
     status: 'started',
     origin: options.origin,
+    chainId: stateConfig?.chainId,
+    chainIdHex: stateConfig?.chainIdHex,
     account: expectedAccount,
+    decision: 'pending',
     promptType: 'signature',
     metadata: options.metadata
   });
-  if (!options.prompt.approveSignature) {
-    throw new Error('MetaMask signature prompt approval is not implemented for the provided prompt driver; fail closed.');
-  }
   try {
+    assertAllowedOrigin(options.origin, options.guardrails);
+    if (stateConfig && options.network) {
+      await assertExpectedChainAndAccount(stateConfig, options.network);
+    }
+    if (!options.prompt.approveSignature) {
+      throw new Error('MetaMask signature prompt approval is not implemented for the provided prompt driver; fail closed.');
+    }
     if (options.dapp?.requestSignature) {
       await options.dapp.requestSignature({ origin: options.origin, expectedAccount, message: options.message });
     }
@@ -260,7 +289,10 @@ export async function approveSignature(options: ApproveSignatureOptions): Promis
       action: 'approveSignature',
       status: 'prompt-approved',
       origin: options.origin,
+      chainId: stateConfig?.chainId,
+      chainIdHex: stateConfig?.chainIdHex,
       account: expectedAccount,
+      decision: 'approved',
       promptType: 'signature',
       metadata: options.metadata
     });
@@ -269,7 +301,10 @@ export async function approveSignature(options: ApproveSignatureOptions): Promis
       action: 'approveSignature',
       status: 'failed',
       origin: options.origin,
+      chainId: stateConfig?.chainId,
+      chainIdHex: stateConfig?.chainIdHex,
       account: expectedAccount,
+      decision: 'rejected',
       promptType: 'signature',
       metadata: createFailureMetadata(options.metadata, error)
     });
@@ -279,37 +314,59 @@ export async function approveSignature(options: ApproveSignatureOptions): Promis
 
 export async function approveTransaction(options: ApproveTransactionOptions): Promise<void> {
   const expectedAccount = normalizeExpectedAccount(options.expectedAccount);
+  const stateConfig = createOptionalWalletStateConfig(options);
+  const target = options.to ? normalizeExpectedAccount(options.to) : undefined;
+  const valueWei = parseTransactionValueWei(options.value);
+  const maxValueWei = parseTransactionValueWei(options.guardrails?.maxTransactionValueWei ?? 0n);
   logWalletControl(options.logger, {
     action: 'approveTransaction',
     status: 'started',
     origin: options.origin,
+    chainId: stateConfig?.chainId,
+    chainIdHex: stateConfig?.chainIdHex,
     account: expectedAccount,
+    target,
+    valueWei: valueWei.toString(),
+    decision: 'pending',
     promptType: 'transaction',
     metadata: options.metadata
   });
-  if (!options.prompt.approveTransaction) {
-    throw new Error('MetaMask transaction prompt approval is not implemented for the provided prompt driver; fail closed.');
-  }
   try {
+    assertAllowedOrigin(options.origin, options.guardrails);
+    assertAllowedTarget(target, options.guardrails);
+    if (valueWei > maxValueWei) {
+      throw new Error(`Transaction value ${valueWei.toString()} wei exceeds configured wallet transaction value cap ${maxValueWei.toString()} wei.`);
+    }
+    if (stateConfig && options.network) {
+      await assertExpectedChainAndAccount(stateConfig, options.network);
+    }
+    if (!options.prompt.approveTransaction) {
+      throw new Error('MetaMask transaction prompt approval is not implemented for the provided prompt driver; fail closed.');
+    }
     if (options.dapp?.requestTransaction) {
       await options.dapp.requestTransaction({
         origin: options.origin,
         expectedAccount,
-        to: options.to ? normalizeExpectedAccount(options.to) : undefined,
+        to: target,
         value: options.value
       });
     }
     await options.prompt.approveTransaction({
       origin: options.origin,
       expectedAccount,
-      to: options.to ? normalizeExpectedAccount(options.to) : undefined,
+      to: target,
       value: options.value
     });
     logWalletControl(options.logger, {
       action: 'approveTransaction',
       status: 'prompt-approved',
       origin: options.origin,
+      chainId: stateConfig?.chainId,
+      chainIdHex: stateConfig?.chainIdHex,
       account: expectedAccount,
+      target,
+      valueWei: valueWei.toString(),
+      decision: 'approved',
       promptType: 'transaction',
       metadata: options.metadata
     });
@@ -318,7 +375,12 @@ export async function approveTransaction(options: ApproveTransactionOptions): Pr
       action: 'approveTransaction',
       status: 'failed',
       origin: options.origin,
+      chainId: stateConfig?.chainId,
+      chainIdHex: stateConfig?.chainIdHex,
       account: expectedAccount,
+      target,
+      valueWei: valueWei.toString(),
+      decision: 'rejected',
       promptType: 'transaction',
       metadata: createFailureMetadata(options.metadata, error)
     });
@@ -334,18 +396,33 @@ export async function switchNetwork(options: WalletStateOptions): Promise<Sepoli
     chainId: config.chainId,
     chainIdHex: config.chainIdHex,
     account: config.expectedAccount,
+    decision: 'pending',
     metadata: options.metadata
   });
-  const result = await provisionSepoliaNetwork(config, options.network);
-  logWalletControl(options.logger, {
-    action: 'switchNetwork',
-    status: 'verified',
-    chainId: result.chainId,
-    chainIdHex: result.chainIdHex,
-    account: result.activeAccount,
-    metadata: options.metadata
-  });
-  return result;
+  try {
+    const result = await provisionSepoliaNetwork(config, options.network);
+    logWalletControl(options.logger, {
+      action: 'switchNetwork',
+      status: 'verified',
+      chainId: result.chainId,
+      chainIdHex: result.chainIdHex,
+      account: result.activeAccount,
+      decision: 'approved',
+      metadata: options.metadata
+    });
+    return result;
+  } catch (error) {
+    logWalletControl(options.logger, {
+      action: 'switchNetwork',
+      status: 'failed',
+      chainId: config.chainId,
+      chainIdHex: config.chainIdHex,
+      account: config.expectedAccount,
+      decision: 'rejected',
+      metadata: createFailureMetadata(options.metadata, error)
+    });
+    throw error;
+  }
 }
 
 export async function assertWalletState(options: WalletStateOptions): Promise<SepoliaNetworkAssertionResult> {
@@ -356,18 +433,33 @@ export async function assertWalletState(options: WalletStateOptions): Promise<Se
     chainId: config.chainId,
     chainIdHex: config.chainIdHex,
     account: config.expectedAccount,
+    decision: 'pending',
     metadata: options.metadata
   });
-  const result = await assertExpectedChainAndAccount(config, options.network);
-  logWalletControl(options.logger, {
-    action: 'assertWalletState',
-    status: 'verified',
-    chainId: result.chainId,
-    chainIdHex: result.chainIdHex,
-    account: result.activeAccount,
-    metadata: options.metadata
-  });
-  return result;
+  try {
+    const result = await assertExpectedChainAndAccount(config, options.network);
+    logWalletControl(options.logger, {
+      action: 'assertWalletState',
+      status: 'verified',
+      chainId: result.chainId,
+      chainIdHex: result.chainIdHex,
+      account: result.activeAccount,
+      decision: 'approved',
+      metadata: options.metadata
+    });
+    return result;
+  } catch (error) {
+    logWalletControl(options.logger, {
+      action: 'assertWalletState',
+      status: 'failed',
+      chainId: config.chainId,
+      chainIdHex: config.chainIdHex,
+      account: config.expectedAccount,
+      decision: 'rejected',
+      metadata: createFailureMetadata(options.metadata, error)
+    });
+    throw error;
+  }
 }
 
 export async function resetProfile(options: ResetProfileOptions): Promise<ResetProfileResult> {
@@ -394,6 +486,20 @@ function createFailureMetadata(metadata: unknown, error: unknown): unknown {
   };
 }
 
+function createOptionalWalletStateConfig(options: { expectedAccount: string; expectedChainId?: string | number; network?: MetaMaskNetworkDriver }): SepoliaNetworkConfig | undefined {
+  if (options.expectedChainId === undefined && options.network === undefined) {
+    return undefined;
+  }
+  if (options.expectedChainId === undefined || options.network === undefined) {
+    throw new Error('Wallet action chain guardrail requires both expectedChainId and network driver when either is configured.');
+  }
+  return createWalletStateConfig({
+    network: options.network,
+    expectedAccount: options.expectedAccount,
+    expectedChainId: options.expectedChainId
+  });
+}
+
 function createWalletStateConfig(options: WalletStateOptions): SepoliaNetworkConfig {
   const chainId = normalizeChainId(options.expectedChainId);
   return {
@@ -403,6 +509,63 @@ function createWalletStateConfig(options: WalletStateOptions): SepoliaNetworkCon
     timeoutMs: 30_000,
     debug: false
   };
+}
+
+function parseTransactionValueWei(value: string | number | bigint | undefined): bigint {
+  if (value === undefined || value === '') {
+    return 0n;
+  }
+  if (typeof value === 'bigint') {
+    if (value < 0n) {
+      throw new Error('Transaction value guardrail must be a non-negative wei amount.');
+    }
+    return value;
+  }
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new Error('Transaction value guardrail must be a non-negative safe integer wei amount.');
+    }
+    return BigInt(value);
+  }
+
+  const trimmed = value.trim();
+  if (/^0x[0-9a-fA-F]+$/.test(trimmed) || /^\d+$/.test(trimmed)) {
+    return BigInt(trimmed);
+  }
+  throw new Error('Transaction value guardrail must be a non-negative decimal or 0x-prefixed wei amount.');
+}
+
+function assertAllowedOrigin(origin: string | undefined, guardrails: WalletGuardrailConfig | undefined): void {
+  const allowedOrigins = guardrails?.allowedOrigins;
+  if (!allowedOrigins?.length) {
+    return;
+  }
+  if (!origin) {
+    throw new Error('Dapp origin is required when wallet origin guardrails are configured.');
+  }
+  const normalizedOrigin = normalizeDappOriginForPolicy(origin);
+  const allowed = allowedOrigins.map((allowedOrigin) => normalizeDappOriginForPolicy(allowedOrigin));
+  if (!allowed.includes(normalizedOrigin)) {
+    throw new Error(`Dapp origin ${normalizedOrigin} is not allowed by wallet guardrails.`);
+  }
+}
+
+function assertAllowedTarget(target: string | undefined, guardrails: WalletGuardrailConfig | undefined): void {
+  const allowedTargets = guardrails?.allowedTargets;
+  if (!allowedTargets?.length) {
+    return;
+  }
+  if (!target) {
+    throw new Error('Transaction target is required when wallet target guardrails are configured.');
+  }
+  const allowed = allowedTargets.map((allowedTarget) => normalizeExpectedAccount(allowedTarget));
+  if (!allowed.includes(target)) {
+    throw new Error(`Transaction target ${target} is not allowed by wallet guardrails.`);
+  }
+}
+
+function normalizeDappOriginForPolicy(origin: string): string {
+  return sanitizeDappOrigin(origin).toLowerCase();
 }
 
 function assertProfileDirIsSafe(profileDir: string, allowedProfileRoot: string): void {
@@ -431,20 +594,23 @@ function redactStructuredValue(value: unknown, keyHint?: string): unknown {
     return value.map((item) => redactStructuredValue(item, keyHint));
   }
   if (value && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, innerValue]) => [
-        key,
-        isSensitiveKey(key) ? '[redacted]' : redactStructuredValue(innerValue, key)
-      ])
-    );
+    const redactedEntries = Object.entries(value as Record<string, unknown>).map(([key, innerValue]) => {
+      const sensitiveReplacement = redactionForSensitiveKey(key);
+      return [key, sensitiveReplacement ?? redactStructuredValue(innerValue, key)];
+    });
+    return Object.fromEntries(redactedEntries);
   }
   return value;
 }
 
 function redactString(value: string): string {
   return value
+    .replace(/^.*\b[A-Z0-9_]*PRIVATE[_-]?KEY[A-Z0-9_]*\s*=.*$/gim, '[redacted:private-key]')
+    .replace(/^.*\b[A-Z0-9_]*(?:MNEMONIC|SEED|PHRASE)[A-Z0-9_]*\s*=.*$/gim, '[redacted:seed-phrase]')
+    .replace(/^.*\b[A-Z0-9_]*PASSWORD[A-Z0-9_]*\s*=.*$/gim, '[redacted:password]')
     .replace(/0x[a-fA-F0-9]{64}/g, '[redacted:private-key]')
     .replace(/\b[a-fA-F0-9]{64}\b/g, '[redacted:private-key]')
+    .replace(/\b(?:[a-z][a-z0-9]*\s+){11,23}[a-z][a-z0-9]*\b/gi, '[redacted:seed-phrase]')
     .replace(/https?:\/\/[^\s)"']+/gi, (match) => redactRpcUrl(match));
 }
 
@@ -457,6 +623,18 @@ function sanitizeDappOrigin(value: string): string {
   }
 }
 
-function isSensitiveKey(key: string): boolean {
-  return /seed|phrase|password|token|secret/i.test(key);
+function redactionForSensitiveKey(key: string): string | undefined {
+  if (/private[_-]?key/i.test(key)) {
+    return '[redacted:private-key]';
+  }
+  if (/seed|phrase|mnemonic/i.test(key)) {
+    return '[redacted:seed-phrase]';
+  }
+  if (/password|passphrase/i.test(key)) {
+    return '[redacted:password]';
+  }
+  if (/token|secret/i.test(key)) {
+    return '[redacted]';
+  }
+  return undefined;
 }

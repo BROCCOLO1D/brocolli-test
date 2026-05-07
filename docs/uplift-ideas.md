@@ -16,3 +16,4 @@ Append-only notes for potentially useful improvements discovered during autonomo
 - Consider a future preflight that queries the configured Sepolia RPC for `eth_chainId` and compares it with `SEPOLIA_CHAIN_ID` before adding the network to MetaMask, with the response sanitized in logs.
 - Add a mocked-provider Playwright smoke test for the fixture dapp that injects `window.ethereum` before page load and records request payloads without opening MetaMask.
 - Consider preserving dapp origins verbatim while redacting only sensitive URL query/token components in wallet-control logs, so observability retains more routing context without exposing RPC credentials.
+- Consider a future file-backed audit sink helper that writes JSONL with rotation and chmod checks, while keeping the current library API logger-driven and dependency-light.

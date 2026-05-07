@@ -104,6 +104,7 @@ describe('wallet-control helpers', () => {
       expectedAccount: ADDRESS,
       expectedChainId: DEFAULT_SEPOLIA_CHAIN_ID,
       origin: 'https://fixture.example/connect/path?session=sensitive-session#fragment',
+      guardrails: { allowedOrigins: ['https://fixture.example/connect/path'] },
       logger: (event) => events.push(event),
       metadata: { rpcUrl: RPC_WITH_CREDENTIAL }
     });
@@ -113,6 +114,32 @@ describe('wallet-control helpers', () => {
     expect(serialized).not.toContain('sensitive-session');
     expect(serialized).not.toContain('super-secret-token');
     expect(serialized).toContain('https://sepolia.infura.io/[redacted-url]');
+  });
+
+  it('fails closed on connect from an origin outside the configured allowlist before dapp or prompt actions', async () => {
+    const calls: string[] = [];
+    const events: WalletControlLogEvent[] = [];
+    const dapp: WalletDappDriver = {
+      async requestConnect() { calls.push('dapp:connect'); },
+      async getConnectedAccount() { return ADDRESS; }
+    };
+    const prompt: WalletPromptDriver = { async approveConnection() { calls.push('prompt:connect'); } };
+
+    await expect(connectWallet({
+      dapp,
+      prompt,
+      network: makeNetworkDriver(),
+      expectedAccount: ADDRESS,
+      expectedChainId: DEFAULT_SEPOLIA_CHAIN_ID,
+      origin: 'https://evil.example/connect?session=sensitive-session',
+      guardrails: { allowedOrigins: ['https://fixture.example/connect'] },
+      logger: (event) => events.push(event)
+    })).rejects.toThrow(/dapp origin.*not allowed/i);
+
+    expect(calls).toEqual([]);
+    expect(events.map((event) => event.decision)).toEqual(['pending', 'rejected']);
+    expect(events[1]).toMatchObject({ status: 'failed', origin: 'https://evil.example/connect', decision: 'rejected' });
+    expect(JSON.stringify(events)).not.toContain('sensitive-session');
   });
 
   it('fails closed and logs sanitized connect failures when dapp account state is unexpected', async () => {
@@ -169,6 +196,35 @@ describe('wallet-control helpers', () => {
     expect(calls).toEqual(['switch:0xaa36a7', 'switched']);
   });
 
+  it('logs sanitized rejected network guardrail decisions when chain or account assertions fail', async () => {
+    const events: WalletControlLogEvent[] = [];
+    const privateKeyLike = `0x${'e'.repeat(64)}`;
+
+    await expect(assertWalletState({
+      network: makeNetworkDriver({ async getChainId() { return '0x1'; } }),
+      expectedAccount: ADDRESS,
+      expectedChainId: DEFAULT_SEPOLIA_CHAIN_ID,
+      logger: (event) => events.push(event),
+      metadata: { driverError: `network assertion leaked ${privateKeyLike} and ${RPC_WITH_CREDENTIAL}` }
+    })).rejects.toThrow(/not allowed|does not match/i);
+
+    expect(events.map((event) => event.status)).toEqual(['started', 'failed']);
+    expect(events.map((event) => event.decision)).toEqual(['pending', 'rejected']);
+    expect(events[1]).toMatchObject({
+      action: 'assertWalletState',
+      status: 'failed',
+      chainId: DEFAULT_SEPOLIA_CHAIN_ID,
+      chainIdHex: '0xaa36a7',
+      account: ADDRESS,
+      decision: 'rejected'
+    });
+    const serialized = JSON.stringify(events);
+    expect(serialized).not.toContain('e'.repeat(64));
+    expect(serialized).not.toContain(RPC_SENSITIVE_SEGMENT);
+    expect(serialized).toContain('[redacted:private-key]');
+    expect(serialized).toContain('https://sepolia.infura.io/[redacted-url]');
+  });
+
   it('fails closed for signature and transaction prompts until prompt driver approval is explicitly implemented', async () => {
     await expect(approveSignature({ prompt: {}, origin: 'https://fixture.example', expectedAccount: ADDRESS, message: 'hello' })).rejects.toThrow(/not implemented|fail closed/i);
     await expect(approveTransaction({ prompt: {}, origin: 'https://fixture.example', expectedAccount: ADDRESS, to: ADDRESS, value: '0x0' })).rejects.toThrow(/not implemented|fail closed/i);
@@ -214,6 +270,49 @@ describe('wallet-control helpers', () => {
     ]);
   });
 
+  it('redacts private keys, passwords, seed-like text, RPC-token URLs, and env-style content from structured audit events', async () => {
+    const events: WalletControlLogEvent[] = [];
+    const privateKeyLike = `0x${'d'.repeat(64)}`;
+    const passwordLike = ['correct', 'horse', 'wallet'].join('-');
+    const seedLike = Array.from({ length: 12 }, (_, index) => `seedword${index}`).join(' ');
+    const envText = [
+      `SEPOLIA_WALLET_PRIVATE_KEY=${privateKeyLike}`,
+      `METAMASK_PASSWORD=${passwordLike}`,
+      `SEED_PHRASE=${seedLike}`,
+      `SEPOLIA_RPC_URL=${RPC_WITH_CREDENTIAL}`
+    ].join('\n');
+    const prompt: WalletPromptDriver = {
+      async approveSignature() {
+        throw new Error(`driver leaked ${envText}`);
+      }
+    };
+
+    await expect(approveSignature({
+      prompt,
+      origin: 'https://fixture.example/sign?session=sensitive-session',
+      expectedAccount: ADDRESS,
+      message: 'hello',
+      logger: (event) => events.push(event),
+      metadata: {
+        driverError: envText,
+        nested: { walletPassword: passwordLike, mnemonic: seedLike, rpcUrl: RPC_WITH_CREDENTIAL }
+      }
+    })).rejects.toThrow(/driver leaked/);
+
+    const serialized = JSON.stringify(events);
+    expect(serialized).not.toContain(privateKeyLike);
+    expect(serialized).not.toContain(passwordLike);
+    expect(serialized).not.toContain(seedLike);
+    expect(serialized).not.toContain(RPC_SENSITIVE_SEGMENT);
+    expect(serialized).not.toContain('SEPOLIA_WALLET_PRIVATE_KEY=');
+    expect(serialized).not.toContain('METAMASK_PASSWORD=');
+    expect(serialized).not.toContain('SEED_PHRASE=');
+    expect(serialized).toContain('[redacted:private-key]');
+    expect(serialized).toContain('[redacted:password]');
+    expect(serialized).toContain('[redacted:seed-phrase]');
+    expect(serialized).toContain('https://sepolia.infura.io/[redacted-url]');
+  });
+
   it('logs sanitized failed prompt decisions without leaking lower-level driver errors', async () => {
     const events: WalletControlLogEvent[] = [];
     const privateKeyLike = `0x${'c'.repeat(64)}`;
@@ -252,6 +351,7 @@ describe('wallet-control helpers', () => {
 
   it('sequences dapp signature and transaction requests before explicit prompt driver approvals', async () => {
     const calls: string[] = [];
+    const events: WalletControlLogEvent[] = [];
     const dapp: WalletDappDriver = {
       async requestConnect() {},
       async getConnectedAccount() { return ADDRESS; },
@@ -272,7 +372,7 @@ describe('wallet-control helpers', () => {
     };
 
     await approveSignature({ dapp, prompt, origin: 'https://fixture.example', expectedAccount: ADDRESS, message: 'hello' });
-    await approveTransaction({ dapp, prompt, origin: 'https://fixture.example', expectedAccount: ADDRESS, to: ADDRESS, value: '0x0' });
+    await approveTransaction({ dapp, prompt, origin: 'https://fixture.example', expectedAccount: ADDRESS, to: ADDRESS, value: '0x0', logger: (event) => events.push(event) });
 
     expect(calls).toEqual([
       'dapp:signature:hello',
@@ -280,6 +380,122 @@ describe('wallet-control helpers', () => {
       `dapp:transaction:${ADDRESS}:0x0`,
       `prompt:transaction:https://fixture.example:${ADDRESS}:0x0`
     ]);
+    expect(events.map((event) => event.decision)).toEqual(['pending', 'approved']);
+    expect(events[0]).toMatchObject({ target: ADDRESS, valueWei: '0' });
+  });
+
+  it('fails closed on unsafe transaction chain before dapp or prompt approval', async () => {
+    const calls: string[] = [];
+    const events: WalletControlLogEvent[] = [];
+    const dapp: WalletDappDriver = {
+      async requestConnect() {},
+      async getConnectedAccount() { return ADDRESS; },
+      async requestTransaction() { calls.push('dapp:transaction'); }
+    };
+    const prompt: WalletPromptDriver = { async approveTransaction() { calls.push('prompt:transaction'); } };
+
+    await expect(approveTransaction({
+      dapp,
+      prompt,
+      network: makeNetworkDriver({ async getChainId() { return '0x1'; } }),
+      expectedChainId: DEFAULT_SEPOLIA_CHAIN_ID,
+      origin: 'https://fixture.example',
+      expectedAccount: ADDRESS,
+      to: ADDRESS,
+      value: '0x0',
+      logger: (event) => events.push(event)
+    })).rejects.toThrow(/not allowed|does not match/i);
+
+    expect(calls).toEqual([]);
+    expect(events.map((event) => event.decision)).toEqual(['pending', 'rejected']);
+    expect(events[0]).toMatchObject({ chainId: DEFAULT_SEPOLIA_CHAIN_ID, chainIdHex: '0xaa36a7', account: ADDRESS, target: ADDRESS, valueWei: '0' });
+    expect(events[1]).toMatchObject({ status: 'failed', promptType: 'transaction', chainId: DEFAULT_SEPOLIA_CHAIN_ID, chainIdHex: '0xaa36a7', account: ADDRESS, target: ADDRESS, valueWei: '0', decision: 'rejected' });
+  });
+
+  it('fails closed on transaction value above the configured guardrail cap before dapp or prompt approval', async () => {
+    const calls: string[] = [];
+    const events: WalletControlLogEvent[] = [];
+    const dapp: WalletDappDriver = {
+      async requestConnect() {},
+      async getConnectedAccount() { return ADDRESS; },
+      async requestTransaction() {
+        calls.push('dapp:transaction');
+      }
+    };
+    const prompt: WalletPromptDriver = {
+      async approveTransaction() {
+        calls.push('prompt:transaction');
+      }
+    };
+
+    await expect(
+      approveTransaction({
+        dapp,
+        prompt,
+        origin: 'https://fixture.example',
+        expectedAccount: ADDRESS,
+        to: ADDRESS,
+        value: '0x1',
+        guardrails: { maxTransactionValueWei: '0' },
+        logger: (event) => events.push(event)
+      })
+    ).rejects.toThrow(/exceeds configured wallet transaction value cap/i);
+
+    expect(calls).toEqual([]);
+    expect(events.map((event) => event.decision)).toEqual(['pending', 'rejected']);
+    expect(events[1]).toMatchObject({
+      status: 'failed',
+      promptType: 'transaction',
+      target: ADDRESS,
+      valueWei: '1',
+      decision: 'rejected'
+    });
+  });
+
+  it('fails closed on transaction target outside the configured allowlist before dapp or prompt approval', async () => {
+    const calls: string[] = [];
+    const events: WalletControlLogEvent[] = [];
+    const dapp: WalletDappDriver = {
+      async requestConnect() {},
+      async getConnectedAccount() { return ADDRESS; },
+      async requestTransaction() { calls.push('dapp:transaction'); }
+    };
+    const prompt: WalletPromptDriver = { async approveTransaction() { calls.push('prompt:transaction'); } };
+
+    await expect(approveTransaction({
+      dapp,
+      prompt,
+      origin: 'https://fixture.example',
+      expectedAccount: ADDRESS,
+      to: OTHER_ADDRESS,
+      value: '0x0',
+      guardrails: { allowedTargets: [ADDRESS] },
+      logger: (event) => events.push(event)
+    })).rejects.toThrow(/transaction target.*not allowed/i);
+
+    expect(calls).toEqual([]);
+    expect(events.map((event) => event.decision)).toEqual(['pending', 'rejected']);
+    expect(events[1]).toMatchObject({ status: 'failed', target: OTHER_ADDRESS, valueWei: '0', decision: 'rejected' });
+  });
+
+  it('allows a low non-zero Sepolia fixture value only when explicitly capped above zero', async () => {
+    const calls: string[] = [];
+    const prompt: WalletPromptDriver = {
+      async approveTransaction(input) {
+        calls.push(`prompt:${input.to}:${input.value}`);
+      }
+    };
+
+    await approveTransaction({
+      prompt,
+      origin: 'https://fixture.example',
+      expectedAccount: ADDRESS,
+      to: ADDRESS,
+      value: '2',
+      guardrails: { maxTransactionValueWei: '2' }
+    });
+
+    expect(calls).toEqual([`prompt:${ADDRESS}:2`]);
   });
 });
 
