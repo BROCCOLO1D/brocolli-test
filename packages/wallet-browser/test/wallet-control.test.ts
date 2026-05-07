@@ -241,6 +241,49 @@ describe('wallet-control helpers', () => {
     ]);
   });
 
+  it('redacts private keys, passwords, seed-like text, RPC-token URLs, and env-style content from structured audit events', async () => {
+    const events: WalletControlLogEvent[] = [];
+    const privateKeyLike = `0x${'d'.repeat(64)}`;
+    const passwordLike = ['correct', 'horse', 'wallet'].join('-');
+    const seedLike = Array.from({ length: 12 }, (_, index) => `seedword${index}`).join(' ');
+    const envText = [
+      `SEPOLIA_WALLET_PRIVATE_KEY=${privateKeyLike}`,
+      `METAMASK_PASSWORD=${passwordLike}`,
+      `SEED_PHRASE=${seedLike}`,
+      `SEPOLIA_RPC_URL=${RPC_WITH_CREDENTIAL}`
+    ].join('\n');
+    const prompt: WalletPromptDriver = {
+      async approveSignature() {
+        throw new Error(`driver leaked ${envText}`);
+      }
+    };
+
+    await expect(approveSignature({
+      prompt,
+      origin: 'https://fixture.example/sign?session=sensitive-session',
+      expectedAccount: ADDRESS,
+      message: 'hello',
+      logger: (event) => events.push(event),
+      metadata: {
+        driverError: envText,
+        nested: { walletPassword: passwordLike, mnemonic: seedLike, rpcUrl: RPC_WITH_CREDENTIAL }
+      }
+    })).rejects.toThrow(/driver leaked/);
+
+    const serialized = JSON.stringify(events);
+    expect(serialized).not.toContain(privateKeyLike);
+    expect(serialized).not.toContain(passwordLike);
+    expect(serialized).not.toContain(seedLike);
+    expect(serialized).not.toContain(RPC_SENSITIVE_SEGMENT);
+    expect(serialized).not.toContain('SEPOLIA_WALLET_PRIVATE_KEY=');
+    expect(serialized).not.toContain('METAMASK_PASSWORD=');
+    expect(serialized).not.toContain('SEED_PHRASE=');
+    expect(serialized).toContain('[redacted:private-key]');
+    expect(serialized).toContain('[redacted:password]');
+    expect(serialized).toContain('[redacted:seed-phrase]');
+    expect(serialized).toContain('https://sepolia.infura.io/[redacted-url]');
+  });
+
   it('logs sanitized failed prompt decisions without leaking lower-level driver errors', async () => {
     const events: WalletControlLogEvent[] = [];
     const privateKeyLike = `0x${'c'.repeat(64)}`;

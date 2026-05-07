@@ -526,20 +526,23 @@ function redactStructuredValue(value: unknown, keyHint?: string): unknown {
     return value.map((item) => redactStructuredValue(item, keyHint));
   }
   if (value && typeof value === 'object') {
-    return Object.fromEntries(
-      Object.entries(value as Record<string, unknown>).map(([key, innerValue]) => [
-        key,
-        isSensitiveKey(key) ? '[redacted]' : redactStructuredValue(innerValue, key)
-      ])
-    );
+    const redactedEntries = Object.entries(value as Record<string, unknown>).map(([key, innerValue]) => {
+      const sensitiveReplacement = redactionForSensitiveKey(key);
+      return [key, sensitiveReplacement ?? redactStructuredValue(innerValue, key)];
+    });
+    return Object.fromEntries(redactedEntries);
   }
   return value;
 }
 
 function redactString(value: string): string {
   return value
+    .replace(/^.*\b[A-Z0-9_]*PRIVATE[_-]?KEY[A-Z0-9_]*\s*=.*$/gim, '[redacted:private-key]')
+    .replace(/^.*\b[A-Z0-9_]*(?:MNEMONIC|SEED|PHRASE)[A-Z0-9_]*\s*=.*$/gim, '[redacted:seed-phrase]')
+    .replace(/^.*\b[A-Z0-9_]*PASSWORD[A-Z0-9_]*\s*=.*$/gim, '[redacted:password]')
     .replace(/0x[a-fA-F0-9]{64}/g, '[redacted:private-key]')
     .replace(/\b[a-fA-F0-9]{64}\b/g, '[redacted:private-key]')
+    .replace(/\b(?:[a-z][a-z0-9]*\s+){11,23}[a-z][a-z0-9]*\b/gi, '[redacted:seed-phrase]')
     .replace(/https?:\/\/[^\s)"']+/gi, (match) => redactRpcUrl(match));
 }
 
@@ -552,6 +555,18 @@ function sanitizeDappOrigin(value: string): string {
   }
 }
 
-function isSensitiveKey(key: string): boolean {
-  return /seed|phrase|password|token|secret/i.test(key);
+function redactionForSensitiveKey(key: string): string | undefined {
+  if (/private[_-]?key/i.test(key)) {
+    return '[redacted:private-key]';
+  }
+  if (/seed|phrase|mnemonic/i.test(key)) {
+    return '[redacted:seed-phrase]';
+  }
+  if (/password|passphrase/i.test(key)) {
+    return '[redacted:password]';
+  }
+  if (/token|secret/i.test(key)) {
+    return '[redacted]';
+  }
+  return undefined;
 }
