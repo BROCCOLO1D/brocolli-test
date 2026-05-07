@@ -205,4 +205,22 @@ describe('MetaMask EIP-1193 page network driver', () => {
       }
     ]);
   });
+
+  it('fails closed when a page-backed Ethereum request exceeds the configured timeout', async () => {
+    const page = {
+      async evaluate() {
+        return new Promise(() => undefined);
+      }
+    };
+    const driver = createMetaMaskNetworkPageDriver({ page: page as never, timeoutMs: 1 });
+    const result = await Promise.race([
+      driver.getChainId().then(
+        () => 'resolved unexpectedly',
+        (error) => (error instanceof Error ? error.message : String(error))
+      ),
+      new Promise<string>((resolve) => setTimeout(() => resolve('still pending'), 25))
+    ]);
+
+    expect(result).toMatch(/eth_chainId.*timed out after 1ms/);
+  });
 });

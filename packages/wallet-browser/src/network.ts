@@ -252,38 +252,61 @@ interface Eip1193Provider {
 }
 
 export function createMetaMaskNetworkPageDriver(options: MetaMaskNetworkPageDriverOptions): MetaMaskNetworkDriver {
+  const timeoutMs = resolvePageDriverTimeoutMs(options.timeoutMs);
   return {
     async getChainId() {
-      const result = await requestEthereum(options.page, { method: 'eth_chainId' });
+      const result = await requestEthereum(options.page, { method: 'eth_chainId' }, timeoutMs);
       if (typeof result !== 'string' && typeof result !== 'number') {
         throw new Error('MetaMask returned an invalid eth_chainId response.');
       }
       return result;
     },
     async getAccounts() {
-      const result = await requestEthereum(options.page, { method: 'eth_accounts' });
+      const result = await requestEthereum(options.page, { method: 'eth_accounts' }, timeoutMs);
       if (!Array.isArray(result) || !result.every((value) => typeof value === 'string')) {
         throw new Error('MetaMask returned an invalid eth_accounts response.');
       }
       return result;
     },
     async switchChain(chainIdHex) {
-      await requestEthereum(options.page, { method: 'wallet_switchEthereumChain', params: [{ chainId: chainIdHex }] });
+      await requestEthereum(options.page, { method: 'wallet_switchEthereumChain', params: [{ chainId: chainIdHex }] }, timeoutMs);
     },
     async addEthereumChain(input) {
-      await requestEthereum(options.page, { method: 'wallet_addEthereumChain', params: [input] });
+      await requestEthereum(options.page, { method: 'wallet_addEthereumChain', params: [input] }, timeoutMs);
     }
   };
 }
 
-async function requestEthereum(page: Page, request: EthereumRequestInput): Promise<unknown> {
-  return page.evaluate(async (input) => {
-    const maybeProvider = (globalThis as { ethereum?: Eip1193Provider }).ethereum;
-    if (!maybeProvider?.request) {
-      throw new Error('window.ethereum.request is not available on the selected MetaMask page.');
+async function requestEthereum(page: Page, request: EthereumRequestInput, timeoutMs: number): Promise<unknown> {
+  let timeoutHandle: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      page.evaluate(async (input) => {
+        const maybeProvider = (globalThis as { ethereum?: Eip1193Provider }).ethereum;
+        if (!maybeProvider?.request) {
+          throw new Error('window.ethereum.request is not available on the selected MetaMask page.');
+        }
+        return maybeProvider.request(input);
+      }, request),
+      new Promise<never>((_, reject) => {
+        timeoutHandle = setTimeout(() => {
+          reject(new Error(`MetaMask EIP-1193 request ${request.method} timed out after ${timeoutMs}ms.`));
+        }, timeoutMs);
+      })
+    ]);
+  } finally {
+    if (timeoutHandle) {
+      clearTimeout(timeoutHandle);
     }
-    return maybeProvider.request(input);
-  }, request);
+  }
+}
+
+function resolvePageDriverTimeoutMs(timeoutMs: number | undefined): number {
+  const resolved = timeoutMs ?? DEFAULT_NETWORK_ASSERTION_TIMEOUT_MS;
+  if (!Number.isInteger(resolved) || resolved <= 0) {
+    throw new Error('MetaMask page network driver timeoutMs must be a positive integer.');
+  }
+  return resolved;
 }
 
 function resolveNetworkTimeoutMs(explicit: number | undefined, envValue: string | undefined): number {

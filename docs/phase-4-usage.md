@@ -34,7 +34,7 @@ await provisionSepoliaNetwork(networkConfig, driver);
 await assertExpectedChainAndAccount(networkConfig, driver);
 ```
 
-The driver is intentionally small and mockable: it needs chain/account reads plus switch/add-chain operations. `createMetaMaskNetworkPageDriver({ page })` now provides an EIP-1193 bridge for already-open wallet/dapp pages with `window.ethereum.request`; extension UI selector automation can still be layered on top once pinned MetaMask pages are verified.
+The driver is intentionally small and mockable: it needs chain/account reads plus switch/add-chain operations. `createMetaMaskNetworkPageDriver({ page, timeoutMs })` now provides an EIP-1193 bridge for already-open wallet/dapp pages with `window.ethereum.request`; extension UI selector automation can still be layered on top once pinned MetaMask pages are verified. Page-backed requests fail closed on the configured timeout instead of waiting indefinitely on a stalled wallet provider.
 
 ## CLI network plan
 
