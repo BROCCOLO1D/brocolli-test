@@ -10,7 +10,10 @@
   "scripts": {
     "build": "pnpm -r build",
     "test": "pnpm -r test",
-    "typecheck": "pnpm -r typecheck"
+    "typecheck": "pnpm -r typecheck",
+    "fixture:build": "pnpm --filter @agent-browser-wallet/fixture-dapp build",
+    "fixture:test": "pnpm --filter @agent-browser-wallet/fixture-dapp test",
+    "fixture:serve": "pnpm --filter @agent-browser-wallet/fixture-dapp serve"
   },
   "devDependencies": {
     "@types/node": "25.6.0",

@@ -14,3 +14,4 @@ Append-only notes for potentially useful improvements discovered during autonomo
 - Consider deriving the MetaMask extension ID from the persistent context service worker/background target so onboarding helpers do not require callers to pass it manually.
 - Add a future wait/assert helper after unlock that polls for an unlocked account UI marker before returning, so callers do not race the MetaMask transition after password submit.
 - Consider a future preflight that queries the configured Sepolia RPC for `eth_chainId` and compares it with `SEPOLIA_CHAIN_ID` before adding the network to MetaMask, with the response sanitized in logs.
+- Add a mocked-provider Playwright smoke test for the fixture dapp that injects `window.ethereum` before page load and records request payloads without opening MetaMask.
