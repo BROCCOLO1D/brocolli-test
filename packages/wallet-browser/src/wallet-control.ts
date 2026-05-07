@@ -339,18 +339,18 @@ function sanitizeLogEvent(event: WalletControlLogEvent): unknown {
   return redactStructuredValue(event);
 }
 
-function redactStructuredValue(value: unknown): unknown {
+function redactStructuredValue(value: unknown, keyHint?: string): unknown {
   if (typeof value === 'string') {
-    return redactString(value);
+    return keyHint === 'origin' ? sanitizeDappOrigin(value) : redactString(value);
   }
   if (Array.isArray(value)) {
-    return value.map((item) => redactStructuredValue(item));
+    return value.map((item) => redactStructuredValue(item, keyHint));
   }
   if (value && typeof value === 'object') {
     return Object.fromEntries(
       Object.entries(value as Record<string, unknown>).map(([key, innerValue]) => [
         key,
-        isSensitiveKey(key) ? '[redacted]' : redactStructuredValue(innerValue)
+        isSensitiveKey(key) ? '[redacted]' : redactStructuredValue(innerValue, key)
       ])
     );
   }
@@ -362,6 +362,15 @@ function redactString(value: string): string {
     .replace(/0x[a-fA-F0-9]{64}/g, '[redacted:private-key]')
     .replace(/\b[a-fA-F0-9]{64}\b/g, '[redacted:private-key]')
     .replace(/https?:\/\/[^\s)"']+/gi, (match) => redactRpcUrl(match));
+}
+
+function sanitizeDappOrigin(value: string): string {
+  try {
+    const parsed = new URL(value);
+    return `${parsed.origin}${parsed.pathname === '/' ? '' : parsed.pathname}`;
+  } catch {
+    return redactString(value);
+  }
 }
 
 function isSensitiveKey(key: string): boolean {

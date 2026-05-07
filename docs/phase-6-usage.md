@@ -66,8 +66,9 @@ const result = await connectWallet({
 
 Wallet-control logs are structured objects with action, status, prompt type, origin, account, and chain metadata. Before events reach the caller-provided logger, obvious secret material is redacted:
 
+- dapp `origin` values keep the safe scheme, host, and path context while dropping query strings and fragments;
 - 32-byte private-key-looking hex strings become `[redacted:private-key]`;
-- HTTP(S) URLs are reduced through the shared RPC URL sanitizer;
+- HTTP(S) URLs outside the `origin` field are reduced through the shared RPC URL sanitizer;
 - sensitive object keys such as password, seed phrase, token, and secret become `[redacted]`.
 
 Do not attach raw `.env` contents, private keys, wallet passwords, seed phrases, browser profile dumps, traces, or screenshots to logger metadata.

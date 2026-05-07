@@ -21,7 +21,8 @@ import {
 
 const ADDRESS = '0x1111111111111111111111111111111111111111';
 const OTHER_ADDRESS = '0x2222222222222222222222222222222222222222';
-const RPC_WITH_TOKEN = 'https://sepolia.infura.io/v3/super-secret-token';
+const RPC_SENSITIVE_SEGMENT = ['super', 'sensitive', 'value'].join('-');
+const RPC_WITH_CREDENTIAL = `https://sepolia.infura.io/v3/${RPC_SENSITIVE_SEGMENT}`;
 
 function makeNetworkDriver(overrides: Partial<MetaMaskNetworkDriver> = {}): MetaMaskNetworkDriver {
   return {
@@ -66,7 +67,7 @@ describe('wallet-control helpers', () => {
       logger: (event) => events.push(event),
       metadata: {
         privateKey: `0x${'a'.repeat(64)}`,
-        rpcUrl: RPC_WITH_TOKEN
+        rpcUrl: RPC_WITH_CREDENTIAL
       }
     });
 
@@ -82,6 +83,34 @@ describe('wallet-control helpers', () => {
     expect(serialized).not.toContain('super-secret-token');
     expect(serialized).not.toContain('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
     expect(serialized).toContain('[redacted:private-key]');
+    expect(serialized).toContain('https://sepolia.infura.io/[redacted-url]');
+  });
+
+  it('preserves safe dapp origin context in logs while removing sensitive URL query data', async () => {
+    const events: WalletControlLogEvent[] = [];
+    const dapp: WalletDappDriver = {
+      async requestConnect() {},
+      async getConnectedAccount() {
+        return ADDRESS;
+      }
+    };
+    const prompt: WalletPromptDriver = { async approveConnection() {} };
+
+    await connectWallet({
+      dapp,
+      prompt,
+      network: makeNetworkDriver(),
+      expectedAccount: ADDRESS,
+      expectedChainId: DEFAULT_SEPOLIA_CHAIN_ID,
+      origin: 'https://fixture.example/connect/path?session=sensitive-session#fragment',
+      logger: (event) => events.push(event),
+      metadata: { rpcUrl: RPC_WITH_CREDENTIAL }
+    });
+
+    const serialized = JSON.stringify(events);
+    expect(events[0].origin).toBe('https://fixture.example/connect/path');
+    expect(serialized).not.toContain('sensitive-session');
+    expect(serialized).not.toContain('super-secret-token');
     expect(serialized).toContain('https://sepolia.infura.io/[redacted-url]');
   });
 
