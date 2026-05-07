@@ -1,0 +1,16 @@
+# Local secrets / environment
+.env
+.env.*
+!.env.example
+
+# Dependencies / build output
+node_modules/
+dist/
+build/
+coverage/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
