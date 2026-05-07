@@ -9,6 +9,13 @@ dist/
 build/
 coverage/
 
+# Wallet browser artifacts (sensitive, local-only)
+.wallet-profiles/
+.wallet-extensions/
+playwright-report/
+test-results/
+traces/
+
 # OS/editor noise
 .DS_Store
 Thumbs.db
