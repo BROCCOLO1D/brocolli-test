@@ -135,6 +135,7 @@ function main(): void {
   setText(selectors.currentChain, formatChainId(undefined));
   setText(selectors.signMessageStatus, 'not requested');
   setText(selectors.sendTransactionStatus, 'not requested');
+  setEnabled(selectors.connectButton, Boolean(window.ethereum));
   setEnabled(selectors.signMessageButton, false);
   setEnabled(selectors.sendTransactionButton, false);
   setStatus(window.ethereum ? 'Wallet provider detected.' : 'No wallet provider detected.');

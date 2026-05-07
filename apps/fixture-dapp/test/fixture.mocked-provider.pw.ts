@@ -74,6 +74,19 @@ async function emitProviderEvent(page: Page, event: string, ...args: unknown[]):
   }, { event, args });
 }
 
+test('fixture dapp disables wallet actions when no provider is injected', async ({ page }) => {
+  const selectors = getFixtureSelectors();
+
+  await page.goto('/');
+
+  await expect(page.locator(selectors.statusOutput)).toHaveText('No wallet provider detected.');
+  await expect(page.locator(selectors.connectedAccount)).toHaveText('not connected');
+  await expect(page.locator(selectors.currentChain)).toHaveText('unknown');
+  await expect(page.locator(selectors.connectButton)).toBeDisabled();
+  await expect(page.locator(selectors.signMessageButton)).toBeDisabled();
+  await expect(page.locator(selectors.sendTransactionButton)).toBeDisabled();
+});
+
 test('fixture dapp reflects provider account and chain change events in stable selectors and status output', async ({ page }) => {
   const selectors = getFixtureSelectors();
   const nextAccount = '0x2222222222222222222222222222222222222222';
