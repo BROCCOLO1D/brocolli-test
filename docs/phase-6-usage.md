@@ -72,6 +72,8 @@ Wallet-control logs are structured objects with action, status, prompt type, ori
 - HTTP(S) URLs outside the `origin` field are reduced through the shared RPC URL sanitizer;
 - sensitive object keys such as password, seed phrase, token, and secret become `[redacted]`.
 
+When signature or transaction dapp/prompt approval fails after a logger is supplied, the helper emits a final `failed` event before rethrowing. The failed event includes a sanitized error message in metadata so callers can diagnose fail-closed prompt decisions without logging raw lower-level driver output.
+
 Do not attach raw `.env` contents, private keys, wallet passwords, seed phrases, browser profile dumps, traces, or screenshots to logger metadata.
 
 ## Acceptance for this slice

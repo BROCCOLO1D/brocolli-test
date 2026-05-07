@@ -237,18 +237,30 @@ export async function approveSignature(options: ApproveSignatureOptions): Promis
   if (!options.prompt.approveSignature) {
     throw new Error('MetaMask signature prompt approval is not implemented for the provided prompt driver; fail closed.');
   }
-  if (options.dapp?.requestSignature) {
-    await options.dapp.requestSignature({ origin: options.origin, expectedAccount, message: options.message });
+  try {
+    if (options.dapp?.requestSignature) {
+      await options.dapp.requestSignature({ origin: options.origin, expectedAccount, message: options.message });
+    }
+    await options.prompt.approveSignature({ origin: options.origin, expectedAccount, message: options.message });
+    logWalletControl(options.logger, {
+      action: 'approveSignature',
+      status: 'prompt-approved',
+      origin: options.origin,
+      account: expectedAccount,
+      promptType: 'signature',
+      metadata: options.metadata
+    });
+  } catch (error) {
+    logWalletControl(options.logger, {
+      action: 'approveSignature',
+      status: 'failed',
+      origin: options.origin,
+      account: expectedAccount,
+      promptType: 'signature',
+      metadata: createFailureMetadata(options.metadata, error)
+    });
+    throw error;
   }
-  await options.prompt.approveSignature({ origin: options.origin, expectedAccount, message: options.message });
-  logWalletControl(options.logger, {
-    action: 'approveSignature',
-    status: 'prompt-approved',
-    origin: options.origin,
-    account: expectedAccount,
-    promptType: 'signature',
-    metadata: options.metadata
-  });
 }
 
 export async function approveTransaction(options: ApproveTransactionOptions): Promise<void> {
@@ -264,28 +276,40 @@ export async function approveTransaction(options: ApproveTransactionOptions): Pr
   if (!options.prompt.approveTransaction) {
     throw new Error('MetaMask transaction prompt approval is not implemented for the provided prompt driver; fail closed.');
   }
-  if (options.dapp?.requestTransaction) {
-    await options.dapp.requestTransaction({
+  try {
+    if (options.dapp?.requestTransaction) {
+      await options.dapp.requestTransaction({
+        origin: options.origin,
+        expectedAccount,
+        to: options.to ? normalizeExpectedAccount(options.to) : undefined,
+        value: options.value
+      });
+    }
+    await options.prompt.approveTransaction({
       origin: options.origin,
       expectedAccount,
       to: options.to ? normalizeExpectedAccount(options.to) : undefined,
       value: options.value
     });
+    logWalletControl(options.logger, {
+      action: 'approveTransaction',
+      status: 'prompt-approved',
+      origin: options.origin,
+      account: expectedAccount,
+      promptType: 'transaction',
+      metadata: options.metadata
+    });
+  } catch (error) {
+    logWalletControl(options.logger, {
+      action: 'approveTransaction',
+      status: 'failed',
+      origin: options.origin,
+      account: expectedAccount,
+      promptType: 'transaction',
+      metadata: createFailureMetadata(options.metadata, error)
+    });
+    throw error;
   }
-  await options.prompt.approveTransaction({
-    origin: options.origin,
-    expectedAccount,
-    to: options.to ? normalizeExpectedAccount(options.to) : undefined,
-    value: options.value
-  });
-  logWalletControl(options.logger, {
-    action: 'approveTransaction',
-    status: 'prompt-approved',
-    origin: options.origin,
-    account: expectedAccount,
-    promptType: 'transaction',
-    metadata: options.metadata
-  });
 }
 
 export async function switchNetwork(options: WalletStateOptions): Promise<SepoliaNetworkAssertionResult> {
@@ -347,6 +371,13 @@ export async function resetProfile(options: ResetProfileOptions): Promise<ResetP
   const result = { status: 'deleted' as const, profileDir, allowedProfileRoot };
   logWalletControl(options.logger, { action: 'resetProfile', status: 'deleted', metadata: options.metadata });
   return result;
+}
+
+function createFailureMetadata(metadata: unknown, error: unknown): unknown {
+  return {
+    value: metadata,
+    errorMessage: error instanceof Error ? error.message : String(error)
+  };
 }
 
 function createWalletStateConfig(options: WalletStateOptions): SepoliaNetworkConfig {

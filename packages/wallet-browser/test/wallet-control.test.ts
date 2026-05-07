@@ -189,6 +189,42 @@ describe('wallet-control helpers', () => {
     ]);
   });
 
+  it('logs sanitized failed prompt decisions without leaking lower-level driver errors', async () => {
+    const events: WalletControlLogEvent[] = [];
+    const privateKeyLike = `0x${'c'.repeat(64)}`;
+    const prompt: WalletPromptDriver = {
+      async approveSignature() {
+        throw new Error(`Prompt rejected after seeing ${privateKeyLike} and ${RPC_WITH_CREDENTIAL}`);
+      }
+    };
+
+    await expect(
+      approveSignature({
+        prompt,
+        origin: 'https://fixture.example/sign?session=sensitive-session',
+        expectedAccount: ADDRESS,
+        message: 'hello',
+        logger: (event) => events.push(event),
+        metadata: { rpcUrl: RPC_WITH_CREDENTIAL }
+      })
+    ).rejects.toThrow(/Prompt rejected/);
+
+    expect(events.map((event) => event.status)).toEqual(['started', 'failed']);
+    expect(events[1]).toMatchObject({
+      action: 'approveSignature',
+      status: 'failed',
+      origin: 'https://fixture.example/sign',
+      promptType: 'signature',
+      account: ADDRESS
+    });
+    const serialized = JSON.stringify(events);
+    expect(serialized).not.toContain('sensitive-session');
+    expect(serialized).not.toContain('c'.repeat(64));
+    expect(serialized).not.toContain(RPC_SENSITIVE_SEGMENT);
+    expect(serialized).toContain('[redacted:private-key]');
+    expect(serialized).toContain('https://sepolia.infura.io/[redacted-url]');
+  });
+
   it('sequences dapp signature and transaction requests before explicit prompt driver approvals', async () => {
     const calls: string[] = [];
     const dapp: WalletDappDriver = {
