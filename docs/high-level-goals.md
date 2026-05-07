@@ -13,7 +13,7 @@ Start with the smallest useful surface:
 - Sepolia next.
 - `wildcat-app-v2` Sepolia as the first real target app.
 
-Success means the repo clearly states what is supported, what is intentionally out of scope, and what versions are pinned.
+Success means the repo clearly states what is supported, what is intentionally out of scope, and what versions are pinned. The detailed Phase 1 contract lives in [Phase 1 runtime matrix](phase-1-runtime-matrix.md).
 
 ## 2. Build a MetaMask profile bootstrapper
 
