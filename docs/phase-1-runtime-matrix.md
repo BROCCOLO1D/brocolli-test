@@ -58,9 +58,14 @@ Create local `.env` files from `.env.example`. Values below are placeholders onl
 | `SEPOLIA_WALLET_ADDRESS` | Yes | Expected burner address used for account assertions. |
 | `SEPOLIA_WALLET_PRIVATE_KEY` | Yes | Burner private key imported into MetaMask during profile setup. |
 | `SEPOLIA_RPC_URL` | Optional | Custom Sepolia RPC endpoint if public defaults are too slow/flaky. |
+| `SEPOLIA_CHAIN_ID` | Yes | Expected chain ID, fixed to `11155111` for Sepolia assertions. |
 | `METAMASK_PASSWORD` | Yes | Local password for the isolated MetaMask profile. |
+| `FIXTURE_DAPP_URL` | Optional | Local fixture dapp URL used by Playwright tests. |
+| `WALLET_PROFILE_NAME` | Optional | Human-readable profile label, defaulting to the Sepolia burner profile. |
 | `WALLET_PROFILE_DIR` | Optional | Override for ignored browser profile storage. |
 | `METAMASK_EXTENSION_DIR` | Optional | Override for ignored unpacked extension storage. |
+| `PRESERVE_WALLET_PROFILE` | Optional | Debug opt-in for keeping profile state after runs; defaults to `false`. |
+| `WALLET_TRACE_MODE` | Optional | Trace retention mode; defaults to `off` for secret-backed wallet runs. |
 
 Safety requirements:
 

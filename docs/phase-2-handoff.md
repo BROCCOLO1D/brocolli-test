@@ -66,13 +66,14 @@ Done when: fixture tests can connect the burner wallet and assert the configured
 The first Phase 2 E2E should be intentionally narrow:
 
 1. load `.env` placeholders from a local ignored `.env`;
-2. fetch/verify pinned MetaMask if missing;
-3. create a throwaway profile;
-4. launch Chromium with MetaMask;
-5. import the burner wallet;
-6. open the fixture dapp;
-7. connect wallet;
-8. assert expected address and chain;
-9. delete or explicitly preserve the profile according to the test mode.
+2. assert `SEPOLIA_CHAIN_ID=11155111` and the expected burner address before wallet approval;
+3. fetch/verify pinned MetaMask if missing;
+4. create a throwaway profile unless `PRESERVE_WALLET_PROFILE=true`;
+5. launch Chromium with MetaMask;
+6. import the burner wallet;
+7. open `FIXTURE_DAPP_URL`;
+8. connect wallet;
+9. assert expected address and chain;
+10. delete or explicitly preserve the profile according to the test mode.
 
 Do not add `wildcat-app-v2` coverage until this fixture flow is reliable.
