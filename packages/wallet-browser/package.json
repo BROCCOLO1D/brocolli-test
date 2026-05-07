@@ -1,0 +1,28 @@
+{
+  "name": "@agent-browser-wallet/wallet-browser",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "bin": {
+    "wallet-browser": "./dist/cli.js"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "cli": "node dist/cli.js"
+  },
+  "dependencies": {
+    "playwright": "1.59.1"
+  },
+  "devDependencies": {}
+}
