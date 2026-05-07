@@ -372,18 +372,33 @@ export async function switchNetwork(options: WalletStateOptions): Promise<Sepoli
     chainId: config.chainId,
     chainIdHex: config.chainIdHex,
     account: config.expectedAccount,
+    decision: 'pending',
     metadata: options.metadata
   });
-  const result = await provisionSepoliaNetwork(config, options.network);
-  logWalletControl(options.logger, {
-    action: 'switchNetwork',
-    status: 'verified',
-    chainId: result.chainId,
-    chainIdHex: result.chainIdHex,
-    account: result.activeAccount,
-    metadata: options.metadata
-  });
-  return result;
+  try {
+    const result = await provisionSepoliaNetwork(config, options.network);
+    logWalletControl(options.logger, {
+      action: 'switchNetwork',
+      status: 'verified',
+      chainId: result.chainId,
+      chainIdHex: result.chainIdHex,
+      account: result.activeAccount,
+      decision: 'approved',
+      metadata: options.metadata
+    });
+    return result;
+  } catch (error) {
+    logWalletControl(options.logger, {
+      action: 'switchNetwork',
+      status: 'failed',
+      chainId: config.chainId,
+      chainIdHex: config.chainIdHex,
+      account: config.expectedAccount,
+      decision: 'rejected',
+      metadata: createFailureMetadata(options.metadata, error)
+    });
+    throw error;
+  }
 }
 
 export async function assertWalletState(options: WalletStateOptions): Promise<SepoliaNetworkAssertionResult> {
@@ -394,18 +409,33 @@ export async function assertWalletState(options: WalletStateOptions): Promise<Se
     chainId: config.chainId,
     chainIdHex: config.chainIdHex,
     account: config.expectedAccount,
+    decision: 'pending',
     metadata: options.metadata
   });
-  const result = await assertExpectedChainAndAccount(config, options.network);
-  logWalletControl(options.logger, {
-    action: 'assertWalletState',
-    status: 'verified',
-    chainId: result.chainId,
-    chainIdHex: result.chainIdHex,
-    account: result.activeAccount,
-    metadata: options.metadata
-  });
-  return result;
+  try {
+    const result = await assertExpectedChainAndAccount(config, options.network);
+    logWalletControl(options.logger, {
+      action: 'assertWalletState',
+      status: 'verified',
+      chainId: result.chainId,
+      chainIdHex: result.chainIdHex,
+      account: result.activeAccount,
+      decision: 'approved',
+      metadata: options.metadata
+    });
+    return result;
+  } catch (error) {
+    logWalletControl(options.logger, {
+      action: 'assertWalletState',
+      status: 'failed',
+      chainId: config.chainId,
+      chainIdHex: config.chainIdHex,
+      account: config.expectedAccount,
+      decision: 'rejected',
+      metadata: createFailureMetadata(options.metadata, error)
+    });
+    throw error;
+  }
 }
 
 export async function resetProfile(options: ResetProfileOptions): Promise<ResetProfileResult> {

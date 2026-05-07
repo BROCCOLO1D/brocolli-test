@@ -196,6 +196,35 @@ describe('wallet-control helpers', () => {
     expect(calls).toEqual(['switch:0xaa36a7', 'switched']);
   });
 
+  it('logs sanitized rejected network guardrail decisions when chain or account assertions fail', async () => {
+    const events: WalletControlLogEvent[] = [];
+    const privateKeyLike = `0x${'e'.repeat(64)}`;
+
+    await expect(assertWalletState({
+      network: makeNetworkDriver({ async getChainId() { return '0x1'; } }),
+      expectedAccount: ADDRESS,
+      expectedChainId: DEFAULT_SEPOLIA_CHAIN_ID,
+      logger: (event) => events.push(event),
+      metadata: { driverError: `network assertion leaked ${privateKeyLike} and ${RPC_WITH_CREDENTIAL}` }
+    })).rejects.toThrow(/not allowed|does not match/i);
+
+    expect(events.map((event) => event.status)).toEqual(['started', 'failed']);
+    expect(events.map((event) => event.decision)).toEqual(['pending', 'rejected']);
+    expect(events[1]).toMatchObject({
+      action: 'assertWalletState',
+      status: 'failed',
+      chainId: DEFAULT_SEPOLIA_CHAIN_ID,
+      chainIdHex: '0xaa36a7',
+      account: ADDRESS,
+      decision: 'rejected'
+    });
+    const serialized = JSON.stringify(events);
+    expect(serialized).not.toContain('e'.repeat(64));
+    expect(serialized).not.toContain(RPC_SENSITIVE_SEGMENT);
+    expect(serialized).toContain('[redacted:private-key]');
+    expect(serialized).toContain('https://sepolia.infura.io/[redacted-url]');
+  });
+
   it('fails closed for signature and transaction prompts until prompt driver approval is explicitly implemented', async () => {
     await expect(approveSignature({ prompt: {}, origin: 'https://fixture.example', expectedAccount: ADDRESS, message: 'hello' })).rejects.toThrow(/not implemented|fail closed/i);
     await expect(approveTransaction({ prompt: {}, origin: 'https://fixture.example', expectedAccount: ADDRESS, to: ADDRESS, value: '0x0' })).rejects.toThrow(/not implemented|fail closed/i);
