@@ -31,6 +31,9 @@ export interface WalletControlLogEvent {
   chainId?: number;
   chainIdHex?: string;
   account?: string;
+  target?: string;
+  valueWei?: string;
+  decision?: 'pending' | 'approved' | 'rejected';
   promptType?: 'connect' | 'signature' | 'transaction';
   metadata?: unknown;
 }
@@ -97,6 +100,10 @@ export interface WalletTransactionPromptInput {
   value?: string;
 }
 
+export interface WalletGuardrailConfig {
+  maxTransactionValueWei?: string | number | bigint;
+}
+
 export interface WalletPromptDriver {
   approveConnection?(input: WalletConnectionPromptInput): Promise<void>;
   approveSignature?(input: WalletSignaturePromptInput): Promise<void>;
@@ -136,6 +143,7 @@ export interface ApproveTransactionOptions {
   expectedAccount: string;
   to?: string;
   value?: string;
+  guardrails?: WalletGuardrailConfig;
   logger?: WalletControlLogger;
   metadata?: unknown;
 }
@@ -279,30 +287,39 @@ export async function approveSignature(options: ApproveSignatureOptions): Promis
 
 export async function approveTransaction(options: ApproveTransactionOptions): Promise<void> {
   const expectedAccount = normalizeExpectedAccount(options.expectedAccount);
+  const target = options.to ? normalizeExpectedAccount(options.to) : undefined;
+  const valueWei = parseTransactionValueWei(options.value);
+  const maxValueWei = parseTransactionValueWei(options.guardrails?.maxTransactionValueWei ?? 0n);
   logWalletControl(options.logger, {
     action: 'approveTransaction',
     status: 'started',
     origin: options.origin,
     account: expectedAccount,
+    target,
+    valueWei: valueWei.toString(),
+    decision: 'pending',
     promptType: 'transaction',
     metadata: options.metadata
   });
-  if (!options.prompt.approveTransaction) {
-    throw new Error('MetaMask transaction prompt approval is not implemented for the provided prompt driver; fail closed.');
-  }
   try {
+    if (valueWei > maxValueWei) {
+      throw new Error(`Transaction value ${valueWei.toString()} wei exceeds configured wallet transaction value cap ${maxValueWei.toString()} wei.`);
+    }
+    if (!options.prompt.approveTransaction) {
+      throw new Error('MetaMask transaction prompt approval is not implemented for the provided prompt driver; fail closed.');
+    }
     if (options.dapp?.requestTransaction) {
       await options.dapp.requestTransaction({
         origin: options.origin,
         expectedAccount,
-        to: options.to ? normalizeExpectedAccount(options.to) : undefined,
+        to: target,
         value: options.value
       });
     }
     await options.prompt.approveTransaction({
       origin: options.origin,
       expectedAccount,
-      to: options.to ? normalizeExpectedAccount(options.to) : undefined,
+      to: target,
       value: options.value
     });
     logWalletControl(options.logger, {
@@ -310,6 +327,9 @@ export async function approveTransaction(options: ApproveTransactionOptions): Pr
       status: 'prompt-approved',
       origin: options.origin,
       account: expectedAccount,
+      target,
+      valueWei: valueWei.toString(),
+      decision: 'approved',
       promptType: 'transaction',
       metadata: options.metadata
     });
@@ -319,6 +339,9 @@ export async function approveTransaction(options: ApproveTransactionOptions): Pr
       status: 'failed',
       origin: options.origin,
       account: expectedAccount,
+      target,
+      valueWei: valueWei.toString(),
+      decision: 'rejected',
       promptType: 'transaction',
       metadata: createFailureMetadata(options.metadata, error)
     });
@@ -403,6 +426,30 @@ function createWalletStateConfig(options: WalletStateOptions): SepoliaNetworkCon
     timeoutMs: 30_000,
     debug: false
   };
+}
+
+function parseTransactionValueWei(value: string | number | bigint | undefined): bigint {
+  if (value === undefined || value === '') {
+    return 0n;
+  }
+  if (typeof value === 'bigint') {
+    if (value < 0n) {
+      throw new Error('Transaction value guardrail must be a non-negative wei amount.');
+    }
+    return value;
+  }
+  if (typeof value === 'number') {
+    if (!Number.isSafeInteger(value) || value < 0) {
+      throw new Error('Transaction value guardrail must be a non-negative safe integer wei amount.');
+    }
+    return BigInt(value);
+  }
+
+  const trimmed = value.trim();
+  if (/^0x[0-9a-fA-F]+$/.test(trimmed) || /^\d+$/.test(trimmed)) {
+    return BigInt(trimmed);
+  }
+  throw new Error('Transaction value guardrail must be a non-negative decimal or 0x-prefixed wei amount.');
 }
 
 function assertProfileDirIsSafe(profileDir: string, allowedProfileRoot: string): void {

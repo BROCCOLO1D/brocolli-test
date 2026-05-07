@@ -93,6 +93,7 @@ export {
   type WalletControlLogger,
   type WalletDappDriver,
   type WalletDappPageDriverOptions,
+  type WalletGuardrailConfig,
   type WalletDappPageDriverSelectors,
   type WalletDappPageLike,
   type WalletDappPageLocator,

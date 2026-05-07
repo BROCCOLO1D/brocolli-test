@@ -252,6 +252,7 @@ describe('wallet-control helpers', () => {
 
   it('sequences dapp signature and transaction requests before explicit prompt driver approvals', async () => {
     const calls: string[] = [];
+    const events: WalletControlLogEvent[] = [];
     const dapp: WalletDappDriver = {
       async requestConnect() {},
       async getConnectedAccount() { return ADDRESS; },
@@ -272,7 +273,7 @@ describe('wallet-control helpers', () => {
     };
 
     await approveSignature({ dapp, prompt, origin: 'https://fixture.example', expectedAccount: ADDRESS, message: 'hello' });
-    await approveTransaction({ dapp, prompt, origin: 'https://fixture.example', expectedAccount: ADDRESS, to: ADDRESS, value: '0x0' });
+    await approveTransaction({ dapp, prompt, origin: 'https://fixture.example', expectedAccount: ADDRESS, to: ADDRESS, value: '0x0', logger: (event) => events.push(event) });
 
     expect(calls).toEqual([
       'dapp:signature:hello',
@@ -280,6 +281,68 @@ describe('wallet-control helpers', () => {
       `dapp:transaction:${ADDRESS}:0x0`,
       `prompt:transaction:https://fixture.example:${ADDRESS}:0x0`
     ]);
+    expect(events.map((event) => event.decision)).toEqual(['pending', 'approved']);
+    expect(events[0]).toMatchObject({ target: ADDRESS, valueWei: '0' });
+  });
+
+  it('fails closed on transaction value above the configured guardrail cap before dapp or prompt approval', async () => {
+    const calls: string[] = [];
+    const events: WalletControlLogEvent[] = [];
+    const dapp: WalletDappDriver = {
+      async requestConnect() {},
+      async getConnectedAccount() { return ADDRESS; },
+      async requestTransaction() {
+        calls.push('dapp:transaction');
+      }
+    };
+    const prompt: WalletPromptDriver = {
+      async approveTransaction() {
+        calls.push('prompt:transaction');
+      }
+    };
+
+    await expect(
+      approveTransaction({
+        dapp,
+        prompt,
+        origin: 'https://fixture.example',
+        expectedAccount: ADDRESS,
+        to: ADDRESS,
+        value: '0x1',
+        guardrails: { maxTransactionValueWei: '0' },
+        logger: (event) => events.push(event)
+      })
+    ).rejects.toThrow(/exceeds configured wallet transaction value cap/i);
+
+    expect(calls).toEqual([]);
+    expect(events.map((event) => event.decision)).toEqual(['pending', 'rejected']);
+    expect(events[1]).toMatchObject({
+      status: 'failed',
+      promptType: 'transaction',
+      target: ADDRESS,
+      valueWei: '1',
+      decision: 'rejected'
+    });
+  });
+
+  it('allows a low non-zero Sepolia fixture value only when explicitly capped above zero', async () => {
+    const calls: string[] = [];
+    const prompt: WalletPromptDriver = {
+      async approveTransaction(input) {
+        calls.push(`prompt:${input.to}:${input.value}`);
+      }
+    };
+
+    await approveTransaction({
+      prompt,
+      origin: 'https://fixture.example',
+      expectedAccount: ADDRESS,
+      to: ADDRESS,
+      value: '2',
+      guardrails: { maxTransactionValueWei: '2' }
+    });
+
+    expect(calls).toEqual([`prompt:${ADDRESS}:2`]);
   });
 });
 
