@@ -61,10 +61,18 @@ export function resolveWalletBrowserConfig(options: ResolveWalletBrowserConfigOp
     env.METAMASK_EXTENSION_PATH ??
     env.METAMASK_EXTENSION_DIR ??
     defaultMetamaskExtensionPath(metamaskExtensionVersion);
+  const usesDefaultExtensionArtifact =
+    options.metamaskExtensionPath === undefined &&
+    options.metamaskExtensionDir === undefined &&
+    env.METAMASK_EXTENSION_PATH === undefined &&
+    env.METAMASK_EXTENSION_DIR === undefined;
 
   const metamaskExtensionPath = resolve(cwd, extensionPathValue);
   assertDirectory(metamaskExtensionPath, 'MetaMask extension path');
   const metamaskExtensionIdentity = readMetaMaskManifestIdentity(metamaskExtensionPath);
+  if (usesDefaultExtensionArtifact) {
+    assertManifestVersionMatchesConfiguredVersion(metamaskExtensionIdentity, metamaskExtensionVersion, metamaskExtensionPath);
+  }
 
   const profileName = sanitizeProfileName(options.profileName ?? env.WALLET_PROFILE_NAME ?? DEFAULT_PROFILE_NAME);
   const profileDir = resolve(cwd, options.profileDir ?? env.WALLET_PROFILE_DIR ?? `.wallet-profiles/${profileName}`);
@@ -113,6 +121,18 @@ function assertSafeProfileDir(profileDir: string, cwd: string, metamaskExtension
 function isSamePathOrChild(candidatePath: string, parentPath: string): boolean {
   const relation = relative(parentPath, candidatePath);
   return relation === '' || (!relation.startsWith('..') && !isAbsolute(relation) && !relation.startsWith(sep));
+}
+
+function assertManifestVersionMatchesConfiguredVersion(
+  identity: MetaMaskExtensionIdentity,
+  configuredVersion: string,
+  extensionPath: string
+): void {
+  if (identity.version !== configuredVersion) {
+    throw new Error(
+      `MetaMask extension manifest version must match configured version for default artifact ${extensionPath}: expected ${configuredVersion}, found ${identity.version ?? 'missing'}.`
+    );
+  }
 }
 
 function readMetaMaskManifestIdentity(extensionPath: string): MetaMaskExtensionIdentity {

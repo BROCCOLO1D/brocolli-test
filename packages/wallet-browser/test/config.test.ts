@@ -19,12 +19,21 @@ describe('resolveWalletBrowserConfig', () => {
     const cwd = tempRoot();
     const extensionPath = join(cwd, '.wallet-extensions', 'metamask', PINNED_METAMASK_VERSION, 'chrome');
     mkdirSync(extensionPath, { recursive: true });
-    writeFileSync(join(extensionPath, 'manifest.json'), JSON.stringify({ manifest_version: 3, name: 'MetaMask' }));
+    writeFileSync(join(extensionPath, 'manifest.json'), JSON.stringify({ manifest_version: 3, name: 'MetaMask', version: PINNED_METAMASK_VERSION }));
 
     const config = resolveWalletBrowserConfig({ cwd, env: {} });
 
     expect(config.metamaskExtensionPath).toBe(extensionPath);
     expect(config.metamaskExtensionVersion).toBe(PINNED_METAMASK_VERSION);
+  });
+
+  it('rejects the default pinned MetaMask artifact when manifest version does not match the configured version', () => {
+    const cwd = tempRoot();
+    const extensionPath = join(cwd, '.wallet-extensions', 'metamask', PINNED_METAMASK_VERSION, 'chrome');
+    mkdirSync(extensionPath, { recursive: true });
+    writeFileSync(join(extensionPath, 'manifest.json'), JSON.stringify({ manifest_version: 3, name: 'MetaMask', version: '13.28.0' }));
+
+    expect(() => resolveWalletBrowserConfig({ cwd, env: {} })).toThrow(/MetaMask extension manifest version must match configured version/);
   });
 
   it('fails clearly when the default pinned MetaMask artifact path is missing', () => {
