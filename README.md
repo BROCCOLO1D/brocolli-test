@@ -25,6 +25,7 @@ This repo is now focused on a concrete path: **Playwright + persistent Chromium 
 - The fixture dapp has stable selectors and mocked-provider tests for connect, signature, zero-value transaction, account/chain events, and guardrail rejection.
 - Wallet-control helper modules model connect/sign/send/network/account guardrails with redacted structured logs.
 - MetaMask page discovery handles `home.html` and `notification.html`, stale/closed page handles, preferred prompt-page selection, context re-querying, and optional keeper-page creation.
+- MetaMask connection prompt approval has a CI-safe driver that discovers `notification.html`, verifies the prompt looks like an origin-matching connect request, and fails closed on transaction/signature/unknown prompt text before clicking.
 - Sensitive artifacts are ignored by default: `.env`, `.wallet-extensions/`, `.wallet-profiles/`, `.wallet-artifacts/`, traces, reports, and local audit logs.
 
 ### Local-only / dogfooded
@@ -140,7 +141,7 @@ Never commit `.env`, wallet profiles, extension bundles, traces, Playwright repo
 
 ## Suggested 5-step plan
 
-1. **Wire prompt approval selectors.** Use the robust page discovery to identify MetaMask connect/sign/transaction prompt state and fail closed on unknown prompts before clicking anything.
+1. **Exercise connection prompt approval locally.** Use the CI-safe MetaMask prompt driver against a real pinned extension/profile, confirm the default selectors still match the current MetaMask build, and record any selector drift as local-only diagnostics.
 2. **Promote real burner onboarding/import runner.** Connect the dry-run `profile-bootstrap-import` manifest path to a real local-only runner that avoids screenshots during secret entry and verifies the active masked account.
 3. **Complete fixture dapp real-wallet connection.** Use the imported burner profile to connect the local fixture dapp, assert `eth_accounts` and chain, then capture inspected local screenshots.
 4. **Complete Wildcat lender connection.** Drive `https://testnet.wildcat.finance/lender`, dismiss consent, choose MetaMask, approve connection, verify the masked `0x8161…4b61` account, and capture a safe screenshot.

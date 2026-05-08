@@ -39,6 +39,17 @@ export {
   type RunMetaMaskSmoke
 } from './metamask-smoke.js';
 
+export {
+  DEFAULT_METAMASK_PROMPT_SELECTORS,
+  approveMetaMaskConnectionPrompt,
+  assertMetaMaskConnectionPromptText,
+  createMetaMaskPromptDriver,
+  type MetaMaskPromptDriverOptions,
+  type MetaMaskPromptLocatorLike,
+  type MetaMaskPromptPageLike,
+  type MetaMaskPromptSelectors
+} from './metamask-prompts.js';
+
 export { runWalletBrowserCli, type WalletBrowserCliOptions } from './cli.js';
 
 export {
