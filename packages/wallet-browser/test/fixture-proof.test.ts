@@ -142,9 +142,17 @@ describe('fixture connection proof manifest verification', () => {
     expect(exitCode).toBe(0);
     expect(stderr).toEqual([]);
     const output = stdout.join('');
-    const result = JSON.parse(output) as { status: string; evidence: { connectionState: string; maskedAccount: string } };
+    const result = JSON.parse(output) as {
+      status: string;
+      artifactDir: string;
+      manifestPath: string;
+      evidence: { connectionState: string; maskedAccount: string };
+    };
     expect(result.status).toBe('verified');
+    expect(result.artifactDir).toBe('[redacted:artifact-dir]');
+    expect(result.manifestPath).toBe('[redacted:manifest-path]');
     expect(result.evidence).toMatchObject({ connectionState: 'connected', maskedAccount: '0x8161…4b61' });
     expect(output).not.toContain('do-not-print-this-password');
+    expect(output).not.toContain(artifactDir);
   });
 });

@@ -164,7 +164,8 @@ export async function runWalletBrowserCli(options: WalletBrowserCliOptions = {})
     }
     try {
       const result = verifyFixtureConnectionProofManifest(artifactDir);
-      stdout(`${JSON.stringify(result, null, 2)}\n`);
+      const publicResult = { ...result, artifactDir: '[redacted:artifact-dir]', manifestPath: '[redacted:manifest-path]' };
+      stdout(`${JSON.stringify(publicResult, null, 2)}\n`);
       return 0;
     } catch (error) {
       stderr(`${error instanceof Error ? error.message : String(error)}\n`);

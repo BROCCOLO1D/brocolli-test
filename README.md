@@ -22,7 +22,7 @@ This repo is now focused on a concrete path: **Playwright + persistent Chromium 
 - `wallet-browser smoke-fixture-extension` launches the fixture dapp beside the extension in the same persistent context.
 - `wallet-browser verify-smoke-artifacts` checks local screenshot manifests against captured files.
 - The package exposes a CI-safe fixture connection proof harness that composes wallet-control connection approval, Sepolia/account verification, post-verification screenshot capture, and local-only proof manifest generation for the later real Chromium runner.
-- `wallet-browser verify-fixture-proof` validates fixture connection proof manifests, requiring connected state, masked account evidence, Sepolia chain `11155111`, safe screenshot basenames, and matching screenshot hashes before a proof can be accepted.
+- `wallet-browser verify-fixture-proof` validates fixture connection proof manifests, requiring connected state, masked account evidence, Sepolia chain `11155111`, safe screenshot basenames, and matching screenshot hashes before a proof can be accepted; CLI output redacts local artifact and manifest paths.
 - `wallet-browser profile-bootstrap-import --dry-run` validates burner import/profile inputs and writes a sanitized local manifest without launching a browser or entering secrets.
 - The fixture dapp has stable selectors and mocked-provider tests for connect, signature, zero-value transaction, account/chain events, and guardrail rejection.
 - Wallet-control helper modules model connect/sign/send/network/account guardrails with redacted structured logs.
