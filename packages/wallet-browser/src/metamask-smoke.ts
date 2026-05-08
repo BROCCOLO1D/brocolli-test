@@ -1,4 +1,5 @@
-import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -13,6 +14,7 @@ export interface MetaMaskSmokeOptions {
   env?: WalletBrowserEnv;
   artifactDir?: string;
   extensionScreenshotLabel?: 'metamask-extension' | 'fixture-extension';
+  notes?: string[];
 }
 
 export interface MetaMaskSmokeScreenshot {
@@ -25,12 +27,20 @@ export interface MetaMaskSmokeResult {
   artifactDir: string;
   screenshots: MetaMaskSmokeScreenshot[];
   inspectionGuidePath: string;
+  manifestPath: string;
   notes: string[];
 }
 
 interface SmokeInspectionGuideOptions {
   artifactDir: string;
   screenshots: readonly MetaMaskSmokeScreenshot[];
+  notes: readonly string[];
+}
+
+interface SmokeArtifactManifestOptions {
+  artifactDir: string;
+  screenshots: readonly MetaMaskSmokeScreenshot[];
+  inspectionGuidePath: string;
   notes: readonly string[];
 }
 
@@ -56,16 +66,19 @@ export async function captureMetaMaskSmokeScreenshots(options: MetaMaskSmokeOpti
     await extensionPage.screenshot({ path: screenshots[1].path, fullPage: true });
 
     const notes = [
+      ...(options.notes ?? []),
       'No wallet was imported, unlocked, connected, used to sign, or used to transact.',
       'Treat generated screenshots as local-only until visually inspected for sensitive content.'
     ];
     const inspectionGuidePath = writeSmokeInspectionGuide({ artifactDir, screenshots, notes });
+    const manifestPath = writeSmokeArtifactManifest({ artifactDir, screenshots, inspectionGuidePath, notes });
 
     return {
       status: 'captured',
       artifactDir,
       screenshots,
       inspectionGuidePath,
+      manifestPath,
       notes
     };
   } finally {
@@ -87,17 +100,14 @@ export async function captureFixtureExtensionSmokeScreenshots(options: MetaMaskS
       METAMASK_EXTENSION_PATH: extensionPath,
       WALLET_PROFILE_DIR: join(artifactDir, 'profile')
     },
-    extensionScreenshotLabel: 'fixture-extension'
-  });
-
-  return {
-    ...result,
+    extensionScreenshotLabel: 'fixture-extension',
     notes: [
       'Fixture extension smoke proves Chromium extension-loading mechanics only; it is not MetaMask UI.',
-      'The generated fixture manifest identifies as MetaMask only to exercise the same launcher validation path without downloading the real bundle.',
-      ...result.notes
+      'The generated fixture manifest identifies as MetaMask only to exercise the same launcher validation path without downloading the real bundle.'
     ]
-  };
+  });
+
+  return result;
 }
 
 async function openBrowserSmokePage(context: BrowserContext, cwd: string): Promise<Page> {
@@ -161,6 +171,34 @@ Keep this artifact directory ignored/local-only unless every screenshot above is
 `
   );
   return guidePath;
+}
+
+export function writeSmokeArtifactManifest(options: SmokeArtifactManifestOptions): string {
+  const manifestPath = join(options.artifactDir, 'SMOKE-MANIFEST.json');
+  const screenshots = options.screenshots.map((screenshot) => {
+    const bytes = readFileSync(screenshot.path);
+    return {
+      label: screenshot.label,
+      file: basename(screenshot.path),
+      sizeBytes: statSync(screenshot.path).size,
+      sha256: createHash('sha256').update(bytes).digest('hex')
+    };
+  });
+
+  writeFileSync(
+    manifestPath,
+    `${JSON.stringify(
+      {
+        artifactType: 'wallet-browser-smoke-screenshots',
+        inspectionGuide: basename(options.inspectionGuidePath),
+        screenshots,
+        notes: options.notes
+      },
+      null,
+      2
+    )}\n`
+  );
+  return manifestPath;
 }
 
 function createFixtureExtension(extensionPath: string): void {

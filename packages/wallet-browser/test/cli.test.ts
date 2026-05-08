@@ -38,6 +38,8 @@ describe('runWalletBrowserCli', () => {
             { label: 'browser-page', path: join(cwd, '.wallet-artifacts', 'metamask-smoke', 'run', 'browser-page.png') },
             { label: 'metamask-extension', path: join(cwd, '.wallet-artifacts', 'metamask-smoke', 'run', 'metamask-extension.png') }
           ],
+          inspectionGuidePath: join(cwd, '.wallet-artifacts', 'metamask-smoke', 'run', 'INSPECTION.md'),
+          manifestPath: join(cwd, '.wallet-artifacts', 'metamask-smoke', 'run', 'SMOKE-MANIFEST.json'),
           notes: ['No wallet was imported, unlocked, connected, used to sign, or used to transact.']
         };
       },
@@ -76,6 +78,8 @@ describe('runWalletBrowserCli', () => {
             { label: 'browser-page', path: join(cwd, '.wallet-artifacts', 'fixture-extension-smoke', 'run', 'browser-page.png') },
             { label: 'fixture-extension', path: join(cwd, '.wallet-artifacts', 'fixture-extension-smoke', 'run', 'fixture-extension.png') }
           ],
+          inspectionGuidePath: join(cwd, '.wallet-artifacts', 'fixture-extension-smoke', 'run', 'INSPECTION.md'),
+          manifestPath: join(cwd, '.wallet-artifacts', 'fixture-extension-smoke', 'run', 'SMOKE-MANIFEST.json'),
           notes: ['Fixture extension smoke proves Chromium extension-loading mechanics only; it is not MetaMask UI.']
         };
       },
