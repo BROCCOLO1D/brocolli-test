@@ -82,6 +82,23 @@ pnpm --filter @agent-browser-wallet/wallet-browser cli prepare
 
 The command prints JSON with Chromium launch metadata such as `userDataDir`, extension `args`, `profileName`, `preserveProfile`, the resolved MetaMask extension path/configured version, the extension identity/version read from `manifest.json` when present, and a `config.present`/`config.missing` summary of the non-secret prepare-only variables it considered. It does not read `.env`, private keys, seed phrases, wallet passwords, or RPC tokens. If validation fails, env-injected local path values such as `METAMASK_EXTENSION_PATH`, `METAMASK_EXTENSION_DIR`, and `WALLET_PROFILE_DIR` are redacted from CLI error output.
 
+## Local MetaMask smoke screenshots
+
+Once an unpacked MetaMask artifact exists at the pinned default path or `METAMASK_EXTENSION_PATH` / `METAMASK_EXTENSION_DIR`, generate local-only Chromium screenshots with:
+
+```bash
+pnpm wallet:smoke:metamask
+```
+
+This script builds `@agent-browser-wallet/wallet-browser`, launches real Playwright Chromium with a persistent user data directory and the unpacked MetaMask extension loaded, opens a normal browser smoke page, opens or discovers the MetaMask extension UI (`chrome-extension://<id>/home.html` / notification pages), captures screenshots, prints JSON metadata, and closes the browser context. Screenshots are written under ignored `.wallet-artifacts/metamask-smoke/<timestamp>/` because browser screenshots/traces are treated as sensitive until manually inspected.
+
+Safety boundaries for this milestone:
+
+- It does **not** import a wallet, unlock MetaMask, connect to the fixture dapp, approve prompts, sign, or transact.
+- Do not move screenshots into `docs/assets/readme/` until visually inspected and confirmed to contain no seed phrases, private keys, passwords, RPC tokens, full addresses, or sensitive local paths.
+- If the MetaMask artifact is absent, the command fails during config validation rather than producing a fake MetaMask screenshot.
+- Wallet onboarding plus fixture-dapp connect screenshots are the next milestone.
+
 ## Acceptance for this foundation
 
 - Node, pnpm, Playwright, TypeScript, and Vitest versions are pinned in committed package files and lockfile.

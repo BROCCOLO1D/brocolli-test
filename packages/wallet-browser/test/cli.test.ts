@@ -16,6 +16,47 @@ function createExtension(path: string): void {
 }
 
 describe('runWalletBrowserCli', () => {
+  it('runs an injected MetaMask smoke screenshot capture and prints sanitized artifact metadata', async () => {
+    const cwd = await tempRoot();
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const calls: Array<{ cwd?: string; envKeys: string[] }> = [];
+
+    const exitCode = await runWalletBrowserCli({
+      argv: ['smoke-metamask'],
+      cwd,
+      env: {
+        METAMASK_EXTENSION_PATH: join(cwd, 'metamask'),
+        METAMASK_PASSWORD: 'do-not-print-this-password'
+      },
+      runMetaMaskSmoke: async (options) => {
+        calls.push({ cwd: options.cwd, envKeys: Object.keys(options.env ?? {}).sort() });
+        return {
+          status: 'captured',
+          artifactDir: join(cwd, '.wallet-artifacts', 'metamask-smoke', 'run'),
+          screenshots: [
+            { label: 'browser-page', path: join(cwd, '.wallet-artifacts', 'metamask-smoke', 'run', 'browser-page.png') },
+            { label: 'metamask-extension', path: join(cwd, '.wallet-artifacts', 'metamask-smoke', 'run', 'metamask-extension.png') }
+          ],
+          notes: ['No wallet was imported, unlocked, connected, used to sign, or used to transact.']
+        };
+      },
+      stdout: (message) => stdout.push(message),
+      stderr: (message) => stderr.push(message)
+    });
+
+    expect(exitCode).toBe(0);
+    expect(stderr).toEqual([]);
+    expect(calls).toEqual([{ cwd, envKeys: ['METAMASK_EXTENSION_PATH', 'METAMASK_PASSWORD'] }]);
+    const output = stdout.join('');
+    const result = JSON.parse(output) as { status: string; artifactDir: string; screenshots: Array<{ label: string; path: string }>; notes: string[] };
+    expect(result.status).toBe('captured');
+    expect(result.artifactDir).toContain('.wallet-artifacts/metamask-smoke');
+    expect(result.screenshots.map((screenshot) => screenshot.label)).toEqual(['browser-page', 'metamask-extension']);
+    expect(result.notes.join(' ')).toContain('No wallet was imported');
+    expect(output).not.toContain('do-not-print-this-password');
+  });
+
   it('prints a sanitized launch plan without launching Chromium or exposing wallet secrets', async () => {
     const cwd = await tempRoot();
     const extensionPath = join(cwd, 'metamask');

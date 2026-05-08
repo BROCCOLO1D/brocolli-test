@@ -12,6 +12,7 @@ coverage/
 # Wallet browser artifacts (sensitive, local-only)
 .wallet-profiles/
 .wallet-extensions/
+.wallet-artifacts/
 playwright-report/
 test-results/
 traces/

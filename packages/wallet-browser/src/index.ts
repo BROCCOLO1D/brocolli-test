@@ -21,6 +21,14 @@ export {
   type ExtensionPageLike
 } from './extension-pages.js';
 
+export {
+  captureMetaMaskSmokeScreenshots,
+  type MetaMaskSmokeOptions,
+  type MetaMaskSmokeResult,
+  type MetaMaskSmokeScreenshot,
+  type RunMetaMaskSmoke
+} from './metamask-smoke.js';
+
 export { runWalletBrowserCli, type WalletBrowserCliOptions } from './cli.js';
 
 export {

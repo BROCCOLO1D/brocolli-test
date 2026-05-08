@@ -3,6 +3,7 @@ import { prepareChromiumLaunchOptions } from './launcher.js';
 import { resolveWalletBrowserConfig, type WalletBrowserEnv } from './config.js';
 import { createMetaMaskOnboardingPlan, resolveMetaMaskOnboardingConfig } from './onboarding.js';
 import { createSepoliaNetworkPlan, resolveSepoliaNetworkConfig } from './network.js';
+import { captureMetaMaskSmokeScreenshots, type RunMetaMaskSmoke } from './metamask-smoke.js';
 
 export interface WalletBrowserCliOptions {
   argv?: string[];
@@ -10,6 +11,7 @@ export interface WalletBrowserCliOptions {
   env?: WalletBrowserEnv;
   stdout?: (message: string) => void;
   stderr?: (message: string) => void;
+  runMetaMaskSmoke?: RunMetaMaskSmoke;
 }
 
 interface WalletBrowserLaunchPlanJson {
@@ -45,13 +47,16 @@ const PREPARE_ERROR_REDACT_KEYS = ['METAMASK_EXTENSION_PATH', 'METAMASK_EXTENSIO
 
 const USAGE = `Usage:
   wallet-browser prepare
+  wallet-browser smoke-metamask
   wallet-browser onboarding-plan
   wallet-browser network-plan
 
 Print a sanitized Chromium persistent-context launch plan for the pinned MetaMask extension profile,
+launch real Chromium with MetaMask loaded and capture local-only smoke screenshots,
 print a redacted MetaMask onboarding plan for the configured burner wallet, or print a
 redacted Sepolia network provisioning plan.
-The prepare command does not launch Chromium. Plan commands validate injected environment/config
+The prepare command does not launch Chromium. The smoke-metamask command launches Chromium but
+never imports, unlocks, connects, signs, or transacts. Plan commands validate injected environment/config
 and never print raw private keys, wallet passwords, or RPC tokens.
 `;
 
@@ -93,6 +98,18 @@ export async function runWalletBrowserCli(options: WalletBrowserCliOptions = {})
   if (command === '--help' || command === '-h' || command === 'help') {
     stdout(USAGE);
     return 0;
+  }
+
+  if (command === 'smoke-metamask') {
+    try {
+      const runSmoke = options.runMetaMaskSmoke ?? captureMetaMaskSmokeScreenshots;
+      const result = await runSmoke({ cwd: options.cwd, env: options.env });
+      stdout(`${JSON.stringify(result, null, 2)}\n`);
+      return 0;
+    } catch (error) {
+      stderr(`${redactPrepareError(error instanceof Error ? error.message : String(error), options.env ?? process.env)}\n`);
+      return 1;
+    }
   }
 
   if (command === 'onboarding-plan') {
