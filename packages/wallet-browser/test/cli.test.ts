@@ -239,6 +239,84 @@ describe('runWalletBrowserCli', () => {
     expect(output).not.toContain(password);
   });
 
+  it('creates a sanitized dry-run profile bootstrap import manifest from wallet env without exposing secrets', async () => {
+    const cwd = await tempRoot();
+    const extensionPath = join(cwd, 'metamask');
+    createExtension(extensionPath);
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const privateKey = `0x${'c'.repeat(64)}`;
+    const password = 'local-only wallet import password';
+    const address = '0x3333333333333333333333333333333333333333';
+
+    const exitCode = await runWalletBrowserCli({
+      argv: ['profile-bootstrap-import', '--dry-run'],
+      cwd,
+      env: {
+        METAMASK_EXTENSION_PATH: extensionPath,
+        WALLET_PROFILE_NAME: 'sepolia-burner',
+        SEPOLIA_WALLET_ADDRESS: address,
+        SEPOLIA_WALLET_PRIVATE_KEY: privateKey,
+        METAMASK_PASSWORD: password
+      },
+      stdout: (message) => stdout.push(message),
+      stderr: (message) => stderr.push(message)
+    });
+
+    expect(exitCode).toBe(0);
+    expect(stderr).toEqual([]);
+    const output = stdout.join('');
+    const result = JSON.parse(output) as {
+      status: string;
+      manifestPath: string;
+      manifest: {
+        artifactType: string;
+        status: string;
+        walletAddress: string;
+        profileName: string;
+        secrets: { privateKeyConfigured: boolean; passwordConfigured: boolean };
+        safetyNotes: string[];
+      };
+    };
+    expect(result.status).toBe('dry-run');
+    expect(result.manifestPath).toContain('.wallet-artifacts/profile-bootstrap-import/');
+    expect(result.manifest.artifactType).toBe('wallet-profile-bootstrap-import');
+    expect(result.manifest.status).toBe('dry-run');
+    expect(result.manifest.walletAddress).toBe('0x3333…3333');
+    expect(result.manifest.profileName).toBe('sepolia-burner');
+    expect(result.manifest.secrets).toEqual({ privateKeyConfigured: true, passwordConfigured: true });
+    expect(result.manifest.safetyNotes.join(' ')).toContain('No browser was launched');
+    expect(output).not.toContain(privateKey);
+    expect(output).not.toContain(privateKey.slice(2));
+    expect(output).not.toContain(password);
+    expect(output).not.toContain(address);
+  });
+
+  it('fails profile bootstrap import validation without echoing private keys or passwords', async () => {
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const badPrivateKey = 'not-a-valid-private-key-value';
+    const password = 'local-only wallet import password';
+
+    const exitCode = await runWalletBrowserCli({
+      argv: ['profile-bootstrap-import', '--dry-run'],
+      cwd: await tempRoot(),
+      env: {
+        SEPOLIA_WALLET_ADDRESS: '0x3333333333333333333333333333333333333333',
+        SEPOLIA_WALLET_PRIVATE_KEY: badPrivateKey,
+        METAMASK_PASSWORD: password
+      },
+      stdout: (message) => stdout.push(message),
+      stderr: (message) => stderr.push(message)
+    });
+
+    expect(exitCode).toBe(1);
+    expect(stdout).toEqual([]);
+    expect(stderr.join('')).toContain('SEPOLIA_WALLET_PRIVATE_KEY');
+    expect(stderr.join('')).not.toContain(badPrivateKey);
+    expect(stderr.join('')).not.toContain(password);
+  });
+
   it('prints a redacted Sepolia network plan without requiring a MetaMask extension artifact or exposing RPC tokens', async () => {
     const stdout: string[] = [];
     const stderr: string[] = [];

@@ -17,8 +17,13 @@ export {
 
 export {
   discoverMetaMaskExtensionPage,
+  getMetaMaskExtensionPagePath,
+  waitForMetaMaskExtensionPage,
   type DiscoverMetaMaskExtensionPageOptions,
-  type ExtensionPageLike
+  type ExtensionBrowserContextLike,
+  type ExtensionPageLike,
+  type MetaMaskExtensionPagePath,
+  type WaitForMetaMaskExtensionPageOptions
 } from './extension-pages.js';
 
 export {
@@ -33,6 +38,46 @@ export {
   type MetaMaskSmokeScreenshot,
   type RunMetaMaskSmoke
 } from './metamask-smoke.js';
+
+export {
+  WILDCAT_LENDER_ARTIFACT_DIR,
+  WILDCAT_LENDER_MANIFEST,
+  WILDCAT_LENDER_URL,
+  createWildcatLenderConnectionPlan,
+  verifyWildcatLenderArtifactManifest,
+  type WildcatLenderArtifactVerificationResult,
+  type WildcatLenderConnectedEvidence,
+  type WildcatLenderConnectionPlan,
+  type WildcatLenderConnectionPlanOptions,
+  type WildcatLenderConnectionPlanStep,
+  type WildcatLenderFailureBlocker,
+  type WildcatLenderFailureEvidence,
+  type WildcatLenderScreenshot
+} from './wildcat-lender.js';
+
+export {
+  DEFAULT_METAMASK_PROMPT_SELECTORS,
+  approveMetaMaskConnectionPrompt,
+  assertMetaMaskConnectionPromptText,
+  createMetaMaskPromptDriver,
+  type MetaMaskPromptDriverOptions,
+  type MetaMaskPromptLocatorLike,
+  type MetaMaskPromptPageLike,
+  type MetaMaskPromptSelectors
+} from './metamask-prompts.js';
+
+export {
+  FIXTURE_CONNECTION_PROOF_MANIFEST,
+  verifyFixtureConnectionProofManifest,
+  type FixtureConnectionProofEvidence,
+  type FixtureConnectionProofScreenshot,
+  type FixtureConnectionProofVerificationResult
+} from './fixture-proof.js';
+export {
+  runFixtureConnectionProof,
+  type FixtureConnectionScreenshotCaptureInput,
+  type RunFixtureConnectionProofOptions
+} from './fixture-harness.js';
 
 export { runWalletBrowserCli, type WalletBrowserCliOptions } from './cli.js';
 
@@ -91,6 +136,16 @@ export {
   type SepoliaNetworkConfig,
   type SepoliaNetworkEnv
 } from './network.js';
+
+export {
+  createProfileBootstrapImportDryRun,
+  createProfileBootstrapImportManifest,
+  maskEthereumAddress,
+  type ProfileBootstrapImportDryRunResult,
+  type ProfileBootstrapImportEnv,
+  type ProfileBootstrapImportManifest,
+  type ResolveProfileBootstrapImportOptions
+} from './profile-bootstrap.js';
 
 export {
   approveSignature,

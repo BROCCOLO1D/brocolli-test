@@ -3,6 +3,9 @@ import { prepareChromiumLaunchOptions } from './launcher.js';
 import { resolveWalletBrowserConfig, type WalletBrowserEnv } from './config.js';
 import { createMetaMaskOnboardingPlan, resolveMetaMaskOnboardingConfig } from './onboarding.js';
 import { createSepoliaNetworkPlan, resolveSepoliaNetworkConfig } from './network.js';
+import { createProfileBootstrapImportDryRun } from './profile-bootstrap.js';
+import { verifyFixtureConnectionProofManifest } from './fixture-proof.js';
+import { createWildcatLenderConnectionPlan, verifyWildcatLenderArtifactManifest } from './wildcat-lender.js';
 import {
   captureFixtureExtensionSmokeScreenshots,
   captureMetaMaskSmokeScreenshots,
@@ -56,7 +59,11 @@ const USAGE = `Usage:
   wallet-browser smoke-metamask
   wallet-browser smoke-fixture-extension
   wallet-browser verify-smoke-artifacts <artifact-dir>
+  wallet-browser verify-fixture-proof <artifact-dir>
+  wallet-browser wildcat-lender-plan
+  wallet-browser verify-wildcat-lender-artifacts <artifact-dir>
   wallet-browser onboarding-plan
+  wallet-browser profile-bootstrap-import --dry-run
   wallet-browser network-plan
 
 Print a sanitized Chromium persistent-context launch plan for the pinned MetaMask extension profile,
@@ -149,6 +156,23 @@ export async function runWalletBrowserCli(options: WalletBrowserCliOptions = {})
     }
   }
 
+  if (command === 'verify-fixture-proof') {
+    const artifactDir = argv[1];
+    if (!artifactDir) {
+      stderr(`Missing artifact directory for verify-fixture-proof.\n\n${USAGE}`);
+      return 1;
+    }
+    try {
+      const result = verifyFixtureConnectionProofManifest(artifactDir);
+      const publicResult = { ...result, artifactDir: '[redacted:artifact-dir]', manifestPath: '[redacted:manifest-path]' };
+      stdout(`${JSON.stringify(publicResult, null, 2)}\n`);
+      return 0;
+    } catch (error) {
+      stderr(`${error instanceof Error ? error.message : String(error)}\n`);
+      return 1;
+    }
+  }
+
   if (command === 'onboarding-plan') {
     try {
       const onboardingConfig = resolveMetaMaskOnboardingConfig({ env: options.env });
@@ -161,6 +185,21 @@ export async function runWalletBrowserCli(options: WalletBrowserCliOptions = {})
     }
   }
 
+  if (command === 'profile-bootstrap-import') {
+    if (!argv.includes('--dry-run')) {
+      stderr('profile-bootstrap-import currently requires --dry-run; real browser import automation is intentionally not run by this command yet.\n');
+      return 1;
+    }
+    try {
+      const result = createProfileBootstrapImportDryRun({ cwd: options.cwd, env: options.env });
+      stdout(`${JSON.stringify(result, null, 2)}\n`);
+      return 0;
+    } catch (error) {
+      stderr(`${redactPrepareError(error instanceof Error ? error.message : String(error), options.env ?? process.env)}\n`);
+      return 1;
+    }
+  }
+
   if (command === 'network-plan') {
     try {
       const networkConfig = resolveSepoliaNetworkConfig({ env: options.env });
@@ -169,6 +208,34 @@ export async function runWalletBrowserCli(options: WalletBrowserCliOptions = {})
       return 0;
     } catch (error) {
       stderr(`${error instanceof Error ? error.message : String(error)}\n`);
+      return 1;
+    }
+  }
+
+  if (command === 'wildcat-lender-plan') {
+    try {
+      const plan = createWildcatLenderConnectionPlan({ cwd: options.cwd, env: options.env });
+      stdout(`${JSON.stringify(plan, null, 2)}\n`);
+      return 0;
+    } catch (error) {
+      stderr(`${redactPrepareError(error instanceof Error ? error.message : String(error), options.env ?? process.env)}\n`);
+      return 1;
+    }
+  }
+
+  if (command === 'verify-wildcat-lender-artifacts') {
+    const artifactDir = argv[1];
+    if (!artifactDir) {
+      stderr(`Missing artifact directory for verify-wildcat-lender-artifacts.\n\n${USAGE}`);
+      return 1;
+    }
+    try {
+      const result = verifyWildcatLenderArtifactManifest(artifactDir);
+      const publicResult = { ...result, artifactDir: '[redacted:artifact-dir]', manifestPath: '[redacted:manifest-path]' };
+      stdout(`${JSON.stringify(publicResult, null, 2)}\n`);
+      return 0;
+    } catch (error) {
+      stderr(`${redactPrepareError(error instanceof Error ? error.message : String(error), options.env ?? process.env)}\n`);
       return 1;
     }
   }
