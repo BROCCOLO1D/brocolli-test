@@ -1,32 +1,43 @@
 # Security and artifact handling
 
-The MVP uses burner Sepolia wallets only, but its local browser profile can still contain private key material, session state, RPC credentials, traces, and screenshots. Treat every wallet-enabled run as sensitive by default.
+Agent Browser Wallet drives real wallet software. Even on testnets, browser profiles and artifacts can contain private key material, sessions, RPC credentials, prompt text, local paths, and screenshots. Treat every wallet-enabled run as sensitive by default.
 
 ## Data classification
 
 | Data | Examples | Git policy | Logging/artifact policy |
 | --- | --- | --- | --- |
-| Public config | package versions, fixture dapp source, non-secret docs | May be committed | May be logged |
-| Placeholder config | `.env.example` names and fake values | May be committed | May be logged |
+| Public config | package versions, fixture source, target/policy examples with placeholder values | May be committed | May be logged |
+| Placeholder config | `.env.example`, fake addresses, fake targets | May be committed | May be logged |
 | Local secrets | `.env`, private keys, seed phrases, wallet password, RPC tokens | Never commit | Never log |
 | Sensitive runtime state | `.wallet-profiles/`, MetaMask local storage, extension state | Never commit | Do not upload unless explicitly scrubbed |
-| Test artifacts | Playwright traces, videos, screenshots, reports | Never commit | Scrub before sharing; assume screenshots can reveal account/session state |
-| Downloaded extension artifacts | `.wallet-extensions/` unpacked MetaMask files | Never commit | Log version/checksum/path only |
+| Downloaded wallet artifacts | `.wallet-extensions/` unpacked MetaMask files | Never commit | Log version/checksum only |
+| QA artifacts | `.wallet-artifacts/`, screenshots, traces, videos, prompt text, reports | Never commit by default | Scrub and verify before sharing |
 
-## Required guardrails for implementation
+## Required guardrails
 
+- Use burner/testnet wallets only.
 - Load secrets from ignored local `.env` files or CI secret stores only.
-- Validate `SEPOLIA_WALLET_ADDRESS` against the imported MetaMask account before approving dapp prompts.
-- Validate chain ID, dapp origin, target contract, and transaction value before approving signatures or transactions.
-- Redact private-key-like values, seed phrases, wallet passwords, and RPC tokens from errors and structured logs.
-- Default to throwaway profile directories for automated tests; require an explicit flag for preserving a named profile.
-- Delete throwaway profiles after successful runs; on failure, preserve only when the caller opts in for debugging.
-- Keep Playwright traces, screenshots, videos, reports, wallet profiles, and extension bundles ignored by Git.
+- Validate account, chain ID, dapp origin, prompt type, target contract, typed-data domain, and transaction value before approving wallet prompts.
+- Default to connect-only behavior; signatures and transactions require explicit policy.
+- Reject unknown prompts.
+- Default transaction value cap is zero wei.
+- Redact private-key-like values, seed phrases, wallet passwords, RPC URLs/tokens, full `.env` contents, full wallet addresses, and sensitive local paths from public output.
+- Keep Playwright traces, screenshots, videos, reports, wallet profiles, extension bundles, and local proof manifests ignored by Git.
+
+## Artifact rules
+
+A proof artifact is acceptable only when:
+
+- it has a manifest with target, scenario, status, masked account, chain ID, origin, screenshot basenames, screenshot hashes, and prompt decisions;
+- screenshots are captured after guardrails pass, or are clearly marked as redacted failure diagnostics;
+- verifiers reject wrong chains, wrong origins, missing screenshots, hash mismatches, unsafe screenshot names, full addresses, and local path leaks;
+- logs state whether any signing or transaction prompt was approved.
 
 ## CI expectations
 
-- Inject secrets through the CI secret store, never checked-in config.
-- Run only against burner Sepolia accounts with limited funds.
-- Disable trace/video retention by default for secret-backed wallet runs, or upload only scrubbed artifacts with restricted access.
-- Fail the job if `.env`, profile directories, extension directories, traces, or reports become tracked files.
-- Print only MetaMask version, checksum, account address, chain ID, dapp origin, and high-level approval decisions.
+- Inject secrets through CI secret storage only.
+- Use burner/testnet accounts with limited funds.
+- Run browser-wallet flows under Xvfb or another explicit display server.
+- Disable trace/video retention by default for secret-backed runs.
+- Upload only scrubbed artifacts, preferably after verifier success.
+- Fail if `.env`, profiles, extension directories, traces, reports, or local proof artifacts become tracked.
