@@ -26,7 +26,8 @@ export function prepareChromiumLaunchOptions(config: WalletBrowserConfig): Prepa
     userDataDir: config.profileDir,
     options: {
       headless: false,
-      args: buildChromiumExtensionArgs(config.metamaskExtensionPath)
+      args: buildChromiumExtensionArgs(config.metamaskExtensionPath),
+      viewport: { width: 1280, height: 900 }
     }
   };
 }

@@ -77,8 +77,10 @@ export async function captureMetaMaskSmokeScreenshots(options: MetaMaskSmokeOpti
 
   const { context } = await launchWalletBrowser({ cwd, env: options.env });
   try {
-    const browserPage = await openBrowserSmokePage(context, cwd);
     const extensionPage = await openOrDiscoverMetaMaskPage(context);
+    await waitForMetaMaskUiReady(extensionPage);
+    await extensionPage.waitForTimeout(10000);
+    const browserPage = await openBrowserSmokePage(context, cwd);
 
     const screenshots: MetaMaskSmokeScreenshot[] = [
       { label: 'browser-page', path: join(artifactDir, 'browser-page.png') },
@@ -86,7 +88,8 @@ export async function captureMetaMaskSmokeScreenshots(options: MetaMaskSmokeOpti
     ];
 
     await browserPage.screenshot({ path: screenshots[0].path, fullPage: true });
-    await extensionPage.screenshot({ path: screenshots[1].path, fullPage: true });
+    await extensionPage.bringToFront();
+    await extensionPage.screenshot({ path: screenshots[1].path });
 
     const notes = [
       ...(options.notes ?? []),
@@ -152,15 +155,23 @@ async function openBrowserSmokePage(context: BrowserContext, cwd: string): Promi
 }
 
 async function openOrDiscoverMetaMaskPage(context: BrowserContext): Promise<Page> {
-  const existingPage = tryDiscoverMetaMaskPage(context.pages());
-  if (existingPage) {
-    return existingPage;
-  }
-
   const extensionId = await discoverSingleExtensionId(context);
   const page = await context.newPage();
-  await page.goto(`chrome-extension://${extensionId}/home.html`);
+  await page.goto(`chrome-extension://${extensionId}/home.html`, { waitUntil: 'domcontentloaded' });
   return page;
+}
+
+async function waitForMetaMaskUiReady(page: Page): Promise<void> {
+  await page.waitForLoadState('domcontentloaded').catch(() => undefined);
+  await page
+    .getByText(/Create a new wallet|I have an existing wallet|Import an existing wallet|MetaMask encountered an error/i)
+    .first()
+    .waitFor({ state: 'visible', timeout: 15000 });
+
+  const bodyText = await page.locator('body').innerText({ timeout: 1000 }).catch(() => '');
+  if (/MetaMask encountered an error/i.test(bodyText)) {
+    throw new Error('MetaMask extension UI reached an error screen before smoke screenshot capture.');
+  }
 }
 
 export function resolveDefaultFixtureDappSmokeUrl(cwd: string): string | undefined {
