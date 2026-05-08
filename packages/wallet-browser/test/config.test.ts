@@ -164,6 +164,17 @@ describe('resolveWalletBrowserConfig', () => {
     );
   });
 
+  it('rejects counterfeit extension manifests that only contain MetaMask as a substring', () => {
+    const cwd = tempRoot();
+    const extensionPath = join(cwd, 'counterfeit-metamask');
+    mkdirSync(extensionPath, { recursive: true });
+    writeFileSync(join(extensionPath, 'manifest.json'), JSON.stringify({ manifest_version: 3, name: 'Not MetaMask' }));
+
+    expect(() => resolveWalletBrowserConfig({ cwd, env: { METAMASK_EXTENSION_PATH: extensionPath } })).toThrow(
+      /MetaMask extension manifest must identify MetaMask/
+    );
+  });
+
   it('rejects localized extension manifests when locale messages do not identify MetaMask', () => {
     const cwd = tempRoot();
     const extensionPath = join(cwd, 'localized-other-wallet');

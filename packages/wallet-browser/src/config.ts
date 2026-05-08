@@ -129,9 +129,9 @@ function readMetaMaskManifestIdentity(extensionPath: string): MetaMaskExtensionI
   const rawName = typeof manifest.name === 'string' ? manifest.name : '';
   const rawShortName = typeof manifest.short_name === 'string' ? manifest.short_name : '';
   const localeMessages = readLocaleMessages(extensionPath, manifest);
-  const name = resolveManifestText(rawName, localeMessages);
-  const shortName = resolveManifestText(rawShortName, localeMessages);
-  if (!/metamask/i.test(`${name} ${shortName}`)) {
+  const name = resolveManifestText(rawName, localeMessages).trim();
+  const shortName = resolveManifestText(rawShortName, localeMessages).trim();
+  if (!isMetaMaskManifestName(name) && !isMetaMaskManifestName(shortName)) {
     throw new Error(`MetaMask extension manifest must identify MetaMask: ${manifestPath}`);
   }
 
@@ -144,6 +144,10 @@ function readMetaMaskManifestIdentity(extensionPath: string): MetaMaskExtensionI
   }
 
   return identity;
+}
+
+function isMetaMaskManifestName(value: string): boolean {
+  return value.trim().toLowerCase() === 'metamask';
 }
 
 function readLocaleMessages(extensionPath: string, manifest: Record<string, unknown>): Record<string, string> {
