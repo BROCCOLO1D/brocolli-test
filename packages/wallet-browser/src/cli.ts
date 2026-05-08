@@ -4,6 +4,7 @@ import { resolveWalletBrowserConfig, type WalletBrowserEnv } from './config.js';
 import { createMetaMaskOnboardingPlan, resolveMetaMaskOnboardingConfig } from './onboarding.js';
 import { createSepoliaNetworkPlan, resolveSepoliaNetworkConfig } from './network.js';
 import { createProfileBootstrapImportDryRun } from './profile-bootstrap.js';
+import { verifyFixtureConnectionProofManifest } from './fixture-proof.js';
 import {
   captureFixtureExtensionSmokeScreenshots,
   captureMetaMaskSmokeScreenshots,
@@ -57,6 +58,7 @@ const USAGE = `Usage:
   wallet-browser smoke-metamask
   wallet-browser smoke-fixture-extension
   wallet-browser verify-smoke-artifacts <artifact-dir>
+  wallet-browser verify-fixture-proof <artifact-dir>
   wallet-browser onboarding-plan
   wallet-browser profile-bootstrap-import --dry-run
   wallet-browser network-plan
@@ -143,6 +145,22 @@ export async function runWalletBrowserCli(options: WalletBrowserCliOptions = {})
     }
     try {
       const result = verifySmokeArtifactManifest(artifactDir);
+      stdout(`${JSON.stringify(result, null, 2)}\n`);
+      return 0;
+    } catch (error) {
+      stderr(`${error instanceof Error ? error.message : String(error)}\n`);
+      return 1;
+    }
+  }
+
+  if (command === 'verify-fixture-proof') {
+    const artifactDir = argv[1];
+    if (!artifactDir) {
+      stderr(`Missing artifact directory for verify-fixture-proof.\n\n${USAGE}`);
+      return 1;
+    }
+    try {
+      const result = verifyFixtureConnectionProofManifest(artifactDir);
       stdout(`${JSON.stringify(result, null, 2)}\n`);
       return 0;
     } catch (error) {

@@ -21,6 +21,7 @@ This repo is now focused on a concrete path: **Playwright + persistent Chromium 
 - `wallet-browser smoke-metamask` launches real Chromium with the pinned MetaMask extension and captures local-only smoke screenshots.
 - `wallet-browser smoke-fixture-extension` launches the fixture dapp beside the extension in the same persistent context.
 - `wallet-browser verify-smoke-artifacts` checks local screenshot manifests against captured files.
+- `wallet-browser verify-fixture-proof` validates fixture connection proof manifests, requiring connected state, masked account evidence, Sepolia chain `11155111`, safe screenshot basenames, and matching screenshot hashes before a proof can be accepted.
 - `wallet-browser profile-bootstrap-import --dry-run` validates burner import/profile inputs and writes a sanitized local manifest without launching a browser or entering secrets.
 - The fixture dapp has stable selectors and mocked-provider tests for connect, signature, zero-value transaction, account/chain events, and guardrail rejection.
 - Wallet-control helper modules model connect/sign/send/network/account guardrails with redacted structured logs.
@@ -97,6 +98,7 @@ Run headed browser smoke tests in WSL/Linux with Xvfb:
 xvfb-run -a pnpm wallet:smoke:metamask
 xvfb-run -a pnpm wallet:smoke:fixture-extension
 pnpm wallet:smoke:verify .wallet-artifacts/metamask-smoke/<run-id>
+pnpm --filter @agent-browser-wallet/wallet-browser cli verify-fixture-proof .wallet-artifacts/fixture-connection-proof/<run-id>
 ```
 
 Inspect sanitized plans:
@@ -143,7 +145,7 @@ Never commit `.env`, wallet profiles, extension bundles, traces, Playwright repo
 
 1. **Exercise connection prompt approval locally.** Use the CI-safe MetaMask prompt driver against a real pinned extension/profile, confirm the default selectors still match the current MetaMask build, and record any selector drift as local-only diagnostics.
 2. **Promote real burner onboarding/import runner.** Connect the dry-run `profile-bootstrap-import` manifest path to a real local-only runner that avoids screenshots during secret entry and verifies the active masked account.
-3. **Complete fixture dapp real-wallet connection.** Use the imported burner profile to connect the local fixture dapp, assert `eth_accounts` and chain, then capture inspected local screenshots.
+3. **Complete fixture dapp real-wallet connection.** Use the imported burner profile to connect the local fixture dapp, assert `eth_accounts` and chain, capture inspected local screenshots, and accept the run only when `verify-fixture-proof` passes against the generated `.wallet-artifacts/fixture-connection-proof/<run-id>/FIXTURE-PROOF-MANIFEST.json` evidence.
 4. **Complete Wildcat lender connection.** Drive `https://testnet.wildcat.finance/lender`, dismiss consent, choose MetaMask, approve connection, verify the masked `0x8161…4b61` account, and capture a safe screenshot.
 5. **Package an agent-facing command.** Add a single opt-in command such as `wallet-browser run --profile sepolia-burner --target wildcat-lender` that prepares the profile, enforces origin/chain/account guardrails, collects artifacts, and exits with a redacted status object.
 

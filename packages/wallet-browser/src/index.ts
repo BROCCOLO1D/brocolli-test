@@ -50,6 +50,14 @@ export {
   type MetaMaskPromptSelectors
 } from './metamask-prompts.js';
 
+export {
+  FIXTURE_CONNECTION_PROOF_MANIFEST,
+  verifyFixtureConnectionProofManifest,
+  type FixtureConnectionProofEvidence,
+  type FixtureConnectionProofScreenshot,
+  type FixtureConnectionProofVerificationResult
+} from './fixture-proof.js';
+
 export { runWalletBrowserCli, type WalletBrowserCliOptions } from './cli.js';
 
 export {
