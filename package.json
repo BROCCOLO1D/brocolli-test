@@ -22,7 +22,8 @@
     "fixture:test": "pnpm --filter @agent-browser-wallet/fixture-dapp test",
     "fixture:test:mocked-provider": "pnpm --filter @agent-browser-wallet/fixture-dapp test:mocked-provider",
     "fixture:serve": "pnpm --filter @agent-browser-wallet/fixture-dapp serve",
-    "wallet:live:fixture-connect": "node scripts/live-fixture-connect.mjs"
+    "wallet:live:fixture-connect": "node scripts/live-fixture-connect.mjs",
+    "wallet:live:wildcat-connect": "node scripts/live-wildcat-connect.mjs"
   },
   "devDependencies": {
     "@playwright/test": "1.59.1",
