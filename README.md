@@ -20,10 +20,22 @@ The committed screenshots below are captured with Playwright from the local fixt
   <img src="docs/assets/readme/fixture-guardrail-rejected.png" width="760" alt="Fixture dapp rejecting a transaction attempt on an unsupported chain">
 </p>
 
-Regenerate these README assets with:
+The public-safe mocked-provider screenshots regenerate with:
 
 ```bash
 pnpm docs:assets
+```
+
+This repo also includes a screenshot captured from the ignored local Sepolia burner configuration. The generator reads `SEPOLIA_WALLET_ADDRESS` from `.env`, checks its Sepolia balance over a public RPC endpoint, masks the address in the page, and captures the fixture flow without committing wallet secrets.
+
+<p align="center">
+  <img src="docs/assets/readme/fixture-real-sepolia-burner.png" width="760" alt="Fixture dapp connected to the masked real Sepolia burner wallet with a public balance check">
+</p>
+
+Regenerate the local real-burner screenshot with:
+
+```bash
+pnpm docs:assets:real-sepolia
 ```
 
 ## What works now

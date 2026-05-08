@@ -12,6 +12,7 @@
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "docs:assets": "node scripts/capture-readme-assets.mjs",
+    "docs:assets:real-sepolia": "node scripts/capture-real-sepolia-readme-asset.mjs",
     "security:scan": "python3 scripts/sensitive-scan.py",
     "fixture:build": "pnpm --filter @agent-browser-wallet/fixture-dapp build",
     "fixture:test": "pnpm --filter @agent-browser-wallet/fixture-dapp test",
