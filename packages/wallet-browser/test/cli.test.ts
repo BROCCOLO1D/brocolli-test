@@ -215,6 +215,28 @@ describe('runWalletBrowserCli', () => {
     expect(stderr.join('')).toContain('MetaMask extension path does not exist');
   });
 
+  it('redacts injected prepare env path values from validation errors', async () => {
+    const cwd = await tempRoot();
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const sensitivePath = join(cwd, 'metamask-super-secret-token-path');
+
+    const exitCode = await runWalletBrowserCli({
+      argv: ['prepare'],
+      cwd,
+      env: { METAMASK_EXTENSION_PATH: sensitivePath },
+      stdout: (message) => stdout.push(message),
+      stderr: (message) => stderr.push(message)
+    });
+
+    expect(exitCode).toBe(1);
+    expect(stdout).toEqual([]);
+    expect(stderr.join('')).toContain('MetaMask extension path does not exist');
+    expect(stderr.join('')).toContain('[redacted:METAMASK_EXTENSION_PATH]');
+    expect(stderr.join('')).not.toContain(sensitivePath);
+    expect(stderr.join('')).not.toContain('super-secret-token-path');
+  });
+
   it('prints usage without touching wallet config for help', async () => {
     const stdout: string[] = [];
     const stderr: string[] = [];

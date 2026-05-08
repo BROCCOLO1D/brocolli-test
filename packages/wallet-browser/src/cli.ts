@@ -41,6 +41,8 @@ const PREPARE_CONFIG_KEYS = [
   'PRESERVE_WALLET_PROFILE'
 ] as const;
 
+const PREPARE_ERROR_REDACT_KEYS = ['METAMASK_EXTENSION_PATH', 'METAMASK_EXTENSION_DIR', 'WALLET_PROFILE_DIR'] as const;
+
 const USAGE = `Usage:
   wallet-browser prepare
   wallet-browser onboarding-plan
@@ -67,6 +69,19 @@ function summarizePrepareConfig(env: WalletBrowserEnv): { present: string[]; mis
   }
 
   return { present, missing };
+}
+
+function redactPrepareError(message: string, env: WalletBrowserEnv): string {
+  let redacted = message;
+
+  for (const key of PREPARE_ERROR_REDACT_KEYS) {
+    const value = env[key]?.trim();
+    if (value) {
+      redacted = redacted.replaceAll(value, `[redacted:${key}]`);
+    }
+  }
+
+  return redacted;
 }
 
 export async function runWalletBrowserCli(options: WalletBrowserCliOptions = {}): Promise<number> {
@@ -128,7 +143,8 @@ export async function runWalletBrowserCli(options: WalletBrowserCliOptions = {})
     stdout(`${JSON.stringify(plan, null, 2)}\n`);
     return 0;
   } catch (error) {
-    stderr(`${error instanceof Error ? error.message : String(error)}\n`);
+    const message = error instanceof Error ? error.message : String(error);
+    stderr(`${redactPrepareError(message, options.env ?? process.env)}\n`);
     return 1;
   }
 }
