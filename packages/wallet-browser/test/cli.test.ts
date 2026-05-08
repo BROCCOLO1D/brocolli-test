@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -95,6 +96,54 @@ describe('runWalletBrowserCli', () => {
     expect(result.artifactDir).toContain('.wallet-artifacts/fixture-extension-smoke');
     expect(result.screenshots.map((screenshot) => screenshot.label)).toEqual(['browser-page', 'fixture-extension']);
     expect(result.notes.join(' ')).toContain('not MetaMask UI');
+    expect(output).not.toContain('do-not-print-this-password');
+  });
+
+  it('verifies a smoke artifact manifest without launching Chromium', async () => {
+    const cwd = await tempRoot();
+    const artifactDir = join(cwd, '.wallet-artifacts', 'metamask-smoke', 'run');
+    mkdirSync(artifactDir, { recursive: true });
+    writeFileSync(join(artifactDir, 'browser-page.png'), 'browser image bytes');
+    writeFileSync(join(artifactDir, 'INSPECTION.md'), '# Review checklist\n');
+    writeFileSync(
+      join(artifactDir, 'SMOKE-MANIFEST.json'),
+      `${JSON.stringify(
+        {
+          artifactType: 'wallet-browser-smoke-screenshots',
+          inspectionGuide: 'INSPECTION.md',
+          screenshots: [
+            {
+              label: 'browser-page',
+              file: 'browser-page.png',
+              sizeBytes: 'browser image bytes'.length,
+              sha256: createHash('sha256').update('browser image bytes').digest('hex')
+            }
+          ],
+          notes: ['No wallet was imported, unlocked, connected, used to sign, or used to transact.']
+        },
+        null,
+        2
+      )}\n`
+    );
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    const exitCode = await runWalletBrowserCli({
+      argv: ['verify-smoke-artifacts', artifactDir],
+      cwd,
+      env: { METAMASK_PASSWORD: 'do-not-print-this-password' },
+      stdout: (message) => stdout.push(message),
+      stderr: (message) => stderr.push(message)
+    });
+
+    expect(exitCode).toBe(0);
+    expect(stderr).toEqual([]);
+    const output = stdout.join('');
+    const result = JSON.parse(output) as { status: string; screenshots: Array<{ file: string; sha256: string }>; notes: string[] };
+    expect(result.status).toBe('verified');
+    expect(result.screenshots).toHaveLength(1);
+    expect(result.screenshots[0].file).toBe('browser-page.png');
+    expect(result.notes.join(' ')).toContain('No wallet was imported');
     expect(output).not.toContain('do-not-print-this-password');
   });
 

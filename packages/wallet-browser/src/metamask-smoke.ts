@@ -44,6 +44,29 @@ interface SmokeArtifactManifestOptions {
   notes: readonly string[];
 }
 
+export interface SmokeArtifactManifestScreenshot {
+  label: MetaMaskSmokeScreenshot['label'];
+  file: string;
+  sizeBytes: number;
+  sha256: string;
+}
+
+interface SmokeArtifactManifest {
+  artifactType: 'wallet-browser-smoke-screenshots';
+  inspectionGuide: string;
+  screenshots: SmokeArtifactManifestScreenshot[];
+  notes: string[];
+}
+
+export interface SmokeArtifactVerificationResult {
+  status: 'verified';
+  artifactDir: string;
+  manifestPath: string;
+  inspectionGuidePath: string;
+  screenshots: SmokeArtifactManifestScreenshot[];
+  notes: string[];
+}
+
 export type RunMetaMaskSmoke = (options: MetaMaskSmokeOptions) => Promise<MetaMaskSmokeResult>;
 
 export async function captureMetaMaskSmokeScreenshots(options: MetaMaskSmokeOptions = {}): Promise<MetaMaskSmokeResult> {
@@ -199,6 +222,67 @@ export function writeSmokeArtifactManifest(options: SmokeArtifactManifestOptions
     )}\n`
   );
   return manifestPath;
+}
+
+export function verifySmokeArtifactManifest(artifactDir: string): SmokeArtifactVerificationResult {
+  const manifestPath = join(artifactDir, 'SMOKE-MANIFEST.json');
+  const manifestText = readFileSync(manifestPath, 'utf8');
+  if (manifestText.includes(artifactDir)) {
+    throw new Error('Smoke artifact manifest must not contain the full artifact directory path.');
+  }
+
+  const manifest = JSON.parse(manifestText) as SmokeArtifactManifest;
+  if (manifest.artifactType !== 'wallet-browser-smoke-screenshots') {
+    throw new Error('Smoke artifact manifest has an unexpected artifact type.');
+  }
+  if (!isSafeArtifactFileName(manifest.inspectionGuide)) {
+    throw new Error('Smoke artifact manifest inspection guide must be a safe basename.');
+  }
+  const inspectionGuidePath = join(artifactDir, manifest.inspectionGuide);
+  if (!existsSync(inspectionGuidePath)) {
+    throw new Error('Smoke artifact inspection guide is missing.');
+  }
+  if (!Array.isArray(manifest.screenshots) || manifest.screenshots.length === 0) {
+    throw new Error('Smoke artifact manifest must list at least one screenshot.');
+  }
+
+  const screenshots = manifest.screenshots.map((screenshot) => verifyManifestScreenshot(artifactDir, screenshot));
+  return {
+    status: 'verified',
+    artifactDir,
+    manifestPath,
+    inspectionGuidePath,
+    screenshots,
+    notes: Array.isArray(manifest.notes) ? manifest.notes : []
+  };
+}
+
+function verifyManifestScreenshot(artifactDir: string, screenshot: SmokeArtifactManifestScreenshot): SmokeArtifactManifestScreenshot {
+  if (!isKnownScreenshotLabel(screenshot.label)) {
+    throw new Error(`Smoke artifact manifest contains an unexpected screenshot label: ${String(screenshot.label)}`);
+  }
+  if (!isSafeArtifactFileName(screenshot.file)) {
+    throw new Error(`Smoke artifact manifest screenshot file must be a safe basename: ${String(screenshot.file)}`);
+  }
+  const screenshotPath = join(artifactDir, screenshot.file);
+  const bytes = readFileSync(screenshotPath);
+  const sizeBytes = statSync(screenshotPath).size;
+  const sha256 = createHash('sha256').update(bytes).digest('hex');
+  if (screenshot.sizeBytes !== sizeBytes) {
+    throw new Error(`Smoke artifact screenshot size mismatch for ${screenshot.file}.`);
+  }
+  if (screenshot.sha256 !== sha256) {
+    throw new Error(`Smoke artifact screenshot hash mismatch for ${screenshot.file}.`);
+  }
+  return { ...screenshot, sizeBytes, sha256 };
+}
+
+function isKnownScreenshotLabel(label: string): label is MetaMaskSmokeScreenshot['label'] {
+  return label === 'browser-page' || label === 'metamask-extension' || label === 'fixture-extension';
+}
+
+function isSafeArtifactFileName(fileName: string): boolean {
+  return typeof fileName === 'string' && fileName.length > 0 && fileName === basename(fileName) && !fileName.includes('..');
 }
 
 function createFixtureExtension(extensionPath: string): void {

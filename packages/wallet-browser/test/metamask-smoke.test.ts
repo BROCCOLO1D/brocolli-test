@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
-import { resolveDefaultFixtureDappSmokeUrl, writeSmokeArtifactManifest, writeSmokeInspectionGuide } from '../src/metamask-smoke.js';
+import { resolveDefaultFixtureDappSmokeUrl, verifySmokeArtifactManifest, writeSmokeArtifactManifest, writeSmokeInspectionGuide } from '../src/metamask-smoke.js';
 
 async function tempRoot(): Promise<string> {
   return mkdtemp(join(tmpdir(), 'wallet-browser-smoke-'));
@@ -95,5 +95,51 @@ describe('writeSmokeArtifactManifest', () => {
       }
     ]);
     expect(manifest.notes).toEqual(['Treat generated screenshots as local-only until visually inspected for sensitive content.']);
+  });
+});
+
+describe('verifySmokeArtifactManifest', () => {
+  it('verifies screenshot hashes and rejects path-bearing manifest metadata', async () => {
+    const artifactDir = await tempRoot();
+    const browserScreenshotPath = join(artifactDir, 'browser-page.png');
+    const extensionScreenshotPath = join(artifactDir, 'metamask-extension.png');
+    const inspectionGuidePath = join(artifactDir, 'INSPECTION.md');
+    writeFileSync(browserScreenshotPath, 'browser image bytes');
+    writeFileSync(extensionScreenshotPath, 'extension image bytes');
+    writeFileSync(inspectionGuidePath, '# Review checklist\n');
+    writeSmokeArtifactManifest({
+      artifactDir,
+      screenshots: [
+        { label: 'browser-page', path: browserScreenshotPath },
+        { label: 'metamask-extension', path: extensionScreenshotPath }
+      ],
+      inspectionGuidePath,
+      notes: ['No wallet was imported, unlocked, connected, used to sign, or used to transact.']
+    });
+
+    const result = verifySmokeArtifactManifest(artifactDir);
+
+    expect(result.status).toBe('verified');
+    expect(result.artifactDir).toBe(artifactDir);
+    expect(result.manifestPath).toBe(join(artifactDir, 'SMOKE-MANIFEST.json'));
+    expect(result.inspectionGuidePath).toBe(inspectionGuidePath);
+    expect(result.screenshots.map((screenshot) => screenshot.file)).toEqual(['browser-page.png', 'metamask-extension.png']);
+  });
+
+  it('fails closed when a screenshot hash no longer matches the manifest', async () => {
+    const artifactDir = await tempRoot();
+    const screenshotPath = join(artifactDir, 'browser-page.png');
+    const inspectionGuidePath = join(artifactDir, 'INSPECTION.md');
+    writeFileSync(screenshotPath, 'original bytes');
+    writeFileSync(inspectionGuidePath, '# Review checklist\n');
+    writeSmokeArtifactManifest({
+      artifactDir,
+      screenshots: [{ label: 'browser-page', path: screenshotPath }],
+      inspectionGuidePath,
+      notes: []
+    });
+    writeFileSync(screenshotPath, 'tampered bytes');
+
+    expect(() => verifySmokeArtifactManifest(artifactDir)).toThrow(/hash mismatch/i);
   });
 });

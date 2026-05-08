@@ -108,6 +108,14 @@ pnpm wallet:smoke:fixture-extension
 
 The fixture command creates an ignored unpacked extension under `.wallet-artifacts/fixture-extension-smoke/<timestamp>/fixture-extension/`, launches it through the same Chromium persistent-context foundation, and captures `browser-page.png` plus `fixture-extension.png` with adjacent `INSPECTION.md` and `SMOKE-MANIFEST.json` files. The fixture page is intentionally labeled **not MetaMask UI**; do not use it as evidence of MetaMask onboarding, wallet connection, signing, or transaction support. Like the real MetaMask smoke path, this launches a headed Chromium instance so Linux/CI environments without a display should run it under `xvfb-run` rather than expecting headless extension UI screenshots.
 
+After any smoke run, verify the local manifest still matches the screenshot files before sharing or promoting artifacts:
+
+```bash
+pnpm wallet:smoke:verify .wallet-artifacts/metamask-smoke/<timestamp>
+```
+
+The verifier reads `SMOKE-MANIFEST.json`, requires only safe basenames for screenshot and checklist entries, checks that `INSPECTION.md` exists, recomputes screenshot byte sizes and SHA-256 hashes, and fails on mismatch. It is an integrity/provenance check only; it does not replace manual visual inspection of the images for secrets or sensitive browser state.
+
 Safety boundaries for this milestone:
 
 - It does **not** import a wallet, unlock MetaMask, connect to the fixture dapp, approve prompts, sign, or transact.

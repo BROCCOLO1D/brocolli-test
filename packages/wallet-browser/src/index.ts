@@ -26,6 +26,7 @@ export {
   captureMetaMaskSmokeScreenshots,
   resolveDefaultFixtureDappSmokeUrl,
   writeSmokeArtifactManifest,
+  verifySmokeArtifactManifest,
   writeSmokeInspectionGuide,
   type MetaMaskSmokeOptions,
   type MetaMaskSmokeResult,

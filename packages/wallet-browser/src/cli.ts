@@ -3,7 +3,12 @@ import { prepareChromiumLaunchOptions } from './launcher.js';
 import { resolveWalletBrowserConfig, type WalletBrowserEnv } from './config.js';
 import { createMetaMaskOnboardingPlan, resolveMetaMaskOnboardingConfig } from './onboarding.js';
 import { createSepoliaNetworkPlan, resolveSepoliaNetworkConfig } from './network.js';
-import { captureFixtureExtensionSmokeScreenshots, captureMetaMaskSmokeScreenshots, type RunMetaMaskSmoke } from './metamask-smoke.js';
+import {
+  captureFixtureExtensionSmokeScreenshots,
+  captureMetaMaskSmokeScreenshots,
+  verifySmokeArtifactManifest,
+  type RunMetaMaskSmoke
+} from './metamask-smoke.js';
 
 export interface WalletBrowserCliOptions {
   argv?: string[];
@@ -50,6 +55,7 @@ const USAGE = `Usage:
   wallet-browser prepare
   wallet-browser smoke-metamask
   wallet-browser smoke-fixture-extension
+  wallet-browser verify-smoke-artifacts <artifact-dir>
   wallet-browser onboarding-plan
   wallet-browser network-plan
 
@@ -123,6 +129,22 @@ export async function runWalletBrowserCli(options: WalletBrowserCliOptions = {})
       return 0;
     } catch (error) {
       stderr(`${redactPrepareError(error instanceof Error ? error.message : String(error), options.env ?? process.env)}\n`);
+      return 1;
+    }
+  }
+
+  if (command === 'verify-smoke-artifacts') {
+    const artifactDir = argv[1];
+    if (!artifactDir) {
+      stderr(`Missing artifact directory for verify-smoke-artifacts.\n\n${USAGE}`);
+      return 1;
+    }
+    try {
+      const result = verifySmokeArtifactManifest(artifactDir);
+      stdout(`${JSON.stringify(result, null, 2)}\n`);
+      return 0;
+    } catch (error) {
+      stderr(`${error instanceof Error ? error.message : String(error)}\n`);
       return 1;
     }
   }
