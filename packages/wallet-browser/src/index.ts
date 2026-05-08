@@ -57,6 +57,11 @@ export {
   type FixtureConnectionProofScreenshot,
   type FixtureConnectionProofVerificationResult
 } from './fixture-proof.js';
+export {
+  runFixtureConnectionProof,
+  type FixtureConnectionScreenshotCaptureInput,
+  type RunFixtureConnectionProofOptions
+} from './fixture-harness.js';
 
 export { runWalletBrowserCli, type WalletBrowserCliOptions } from './cli.js';
 
