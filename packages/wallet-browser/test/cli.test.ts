@@ -44,8 +44,10 @@ describe('runWalletBrowserCli', () => {
       args: string[];
       metamaskExtensionPath: string;
       metamaskExtensionVersion: string;
+      metamaskExtensionIdentity: { name: string; shortName?: string; version?: string };
       profileName: string;
       preserveProfile: boolean;
+      config: { present: string[]; missing: string[] };
     };
     expect(plan.browserName).toBe('chromium');
     expect(plan.metamaskExtensionPath).toBe(extensionPath);
@@ -56,6 +58,9 @@ describe('runWalletBrowserCli', () => {
     ]);
     expect(plan.profileName).toBe('agent-run');
     expect(plan.preserveProfile).toBe(false);
+    expect(plan.metamaskExtensionIdentity).toEqual({ name: 'MetaMask' });
+    expect(plan.config.present).toEqual(['METAMASK_EXTENSION_PATH', 'WALLET_PROFILE_NAME']);
+    expect(plan.config.missing).toEqual(['METAMASK_EXTENSION_DIR', 'METAMASK_EXTENSION_VERSION', 'WALLET_PROFILE_DIR', 'PRESERVE_WALLET_PROFILE']);
     expect(stdout.join('')).not.toContain('0xnot-a-real-secret');
     expect(stdout.join('')).not.toContain('not-a-real-password');
   });

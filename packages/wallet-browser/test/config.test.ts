@@ -37,12 +37,13 @@ describe('resolveWalletBrowserConfig', () => {
     const cwd = tempRoot();
     const extensionPath = join(cwd, '.wallet-extensions', 'metamask', '13.0.0');
     mkdirSync(extensionPath, { recursive: true });
-    writeFileSync(join(extensionPath, 'manifest.json'), JSON.stringify({ manifest_version: 3, name: 'MetaMask' }));
+    writeFileSync(join(extensionPath, 'manifest.json'), JSON.stringify({ manifest_version: 3, name: 'MetaMask', version: '13.29.0' }));
 
     const config = resolveWalletBrowserConfig({ cwd, env: { METAMASK_EXTENSION_PATH: extensionPath } });
 
     expect(config.browserName).toBe('chromium');
     expect(config.metamaskExtensionPath).toBe(extensionPath);
+    expect(config.metamaskExtensionIdentity).toEqual({ name: 'MetaMask', shortName: undefined, version: '13.29.0' });
     expect(config.profileDir).toBe(join(cwd, '.wallet-profiles', 'sepolia-burner'));
     expect(config.preserveProfile).toBe(false);
   });
@@ -152,6 +153,7 @@ describe('prepareChromiumLaunchOptions', () => {
       browserName: 'chromium',
       metamaskExtensionPath: '/tmp/metamask-extension',
       metamaskExtensionVersion: '13.29.0',
+      metamaskExtensionIdentity: { name: 'MetaMask', version: '13.29.0' },
       profileDir: '/tmp/wallet-profile',
       profileName: 'sepolia-burner',
       preserveProfile: false

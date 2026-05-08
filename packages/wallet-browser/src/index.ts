@@ -1,6 +1,7 @@
 export {
   PINNED_METAMASK_VERSION,
   resolveWalletBrowserConfig,
+  type MetaMaskExtensionIdentity,
   type ResolveWalletBrowserConfigOptions,
   type WalletBrowserConfig,
   type WalletBrowserEnv

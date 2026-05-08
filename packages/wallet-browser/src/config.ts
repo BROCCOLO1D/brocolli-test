@@ -33,10 +33,17 @@ export interface ResolveWalletBrowserConfigOptions {
   preserveProfile?: boolean;
 }
 
+export interface MetaMaskExtensionIdentity {
+  name: string;
+  shortName?: string;
+  version?: string;
+}
+
 export interface WalletBrowserConfig {
   browserName: 'chromium';
   metamaskExtensionPath: string;
   metamaskExtensionVersion: string;
+  metamaskExtensionIdentity: MetaMaskExtensionIdentity;
   profileDir: string;
   profileName: string;
   preserveProfile: boolean;
@@ -57,7 +64,7 @@ export function resolveWalletBrowserConfig(options: ResolveWalletBrowserConfigOp
 
   const metamaskExtensionPath = resolve(cwd, extensionPathValue);
   assertDirectory(metamaskExtensionPath, 'MetaMask extension path');
-  assertManifestExists(metamaskExtensionPath);
+  const metamaskExtensionIdentity = readMetaMaskManifestIdentity(metamaskExtensionPath);
 
   const profileName = sanitizeProfileName(options.profileName ?? env.WALLET_PROFILE_NAME ?? DEFAULT_PROFILE_NAME);
   const profileDir = resolve(cwd, options.profileDir ?? env.WALLET_PROFILE_DIR ?? `.wallet-profiles/${profileName}`);
@@ -68,6 +75,7 @@ export function resolveWalletBrowserConfig(options: ResolveWalletBrowserConfigOp
     browserName: 'chromium',
     metamaskExtensionPath,
     metamaskExtensionVersion,
+    metamaskExtensionIdentity,
     profileDir,
     profileName,
     preserveProfile: options.preserveProfile ?? parseBoolean(env.PRESERVE_WALLET_PROFILE)
@@ -90,7 +98,7 @@ function assertDirectory(path: string, label: string): void {
   }
 }
 
-function assertManifestExists(extensionPath: string): void {
+function readMetaMaskManifestIdentity(extensionPath: string): MetaMaskExtensionIdentity {
   const manifestPath = join(extensionPath, 'manifest.json');
   if (!existsSync(manifestPath)) {
     throw new Error(`MetaMask extension manifest is missing: ${manifestPath}`);
@@ -106,6 +114,16 @@ function assertManifestExists(extensionPath: string): void {
   if (!/metamask/i.test(`${name} ${shortName}`)) {
     throw new Error(`MetaMask extension manifest must identify MetaMask: ${manifestPath}`);
   }
+
+  const identity: MetaMaskExtensionIdentity = { name };
+  if (shortName !== '') {
+    identity.shortName = shortName;
+  }
+  if (typeof manifest.version === 'string' && manifest.version.trim() !== '') {
+    identity.version = manifest.version;
+  }
+
+  return identity;
 }
 
 function readManifest(manifestPath: string): Record<string, unknown> {

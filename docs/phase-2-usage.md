@@ -80,7 +80,7 @@ After `pnpm build`, developers and agents can ask the package to validate config
 pnpm --filter @agent-browser-wallet/wallet-browser cli prepare
 ```
 
-The command prints JSON with Chromium launch metadata such as `userDataDir`, extension `args`, `profileName`, `preserveProfile`, and the resolved MetaMask extension path/version. It does not read `.env`, private keys, seed phrases, wallet passwords, or RPC tokens.
+The command prints JSON with Chromium launch metadata such as `userDataDir`, extension `args`, `profileName`, `preserveProfile`, the resolved MetaMask extension path/configured version, the extension identity/version read from `manifest.json` when present, and a `config.present`/`config.missing` summary of the non-secret prepare-only variables it considered. It does not read `.env`, private keys, seed phrases, wallet passwords, or RPC tokens.
 
 ## Acceptance for this foundation
 

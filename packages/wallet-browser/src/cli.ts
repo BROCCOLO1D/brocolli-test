@@ -18,10 +18,28 @@ interface WalletBrowserLaunchPlanJson {
   args: string[];
   metamaskExtensionPath: string;
   metamaskExtensionVersion: string;
+  metamaskExtensionIdentity: {
+    name: string;
+    shortName?: string;
+    version?: string;
+  };
   profileDir: string;
   profileName: string;
   preserveProfile: boolean;
+  config: {
+    present: string[];
+    missing: string[];
+  };
 }
+
+const PREPARE_CONFIG_KEYS = [
+  'METAMASK_EXTENSION_PATH',
+  'METAMASK_EXTENSION_DIR',
+  'METAMASK_EXTENSION_VERSION',
+  'WALLET_PROFILE_DIR',
+  'WALLET_PROFILE_NAME',
+  'PRESERVE_WALLET_PROFILE'
+] as const;
 
 const USAGE = `Usage:
   wallet-browser prepare
@@ -34,6 +52,22 @@ redacted Sepolia network provisioning plan.
 The prepare command does not launch Chromium. Plan commands validate injected environment/config
 and never print raw private keys, wallet passwords, or RPC tokens.
 `;
+
+function summarizePrepareConfig(env: WalletBrowserEnv): { present: string[]; missing: string[] } {
+  const present: string[] = [];
+  const missing: string[] = [];
+
+  for (const key of PREPARE_CONFIG_KEYS) {
+    const value = env[key];
+    if (typeof value === 'string' && value.trim() !== '') {
+      present.push(key);
+    } else {
+      missing.push(key);
+    }
+  }
+
+  return { present, missing };
+}
 
 export async function runWalletBrowserCli(options: WalletBrowserCliOptions = {}): Promise<number> {
   const argv = options.argv ?? process.argv.slice(2);
@@ -84,9 +118,11 @@ export async function runWalletBrowserCli(options: WalletBrowserCliOptions = {})
       args: [...(launchOptions.options.args ?? [])],
       metamaskExtensionPath: config.metamaskExtensionPath,
       metamaskExtensionVersion: config.metamaskExtensionVersion,
+      metamaskExtensionIdentity: config.metamaskExtensionIdentity,
       profileDir: config.profileDir,
       profileName: config.profileName,
-      preserveProfile: config.preserveProfile
+      preserveProfile: config.preserveProfile,
+      config: summarizePrepareConfig(options.env ?? process.env)
     };
 
     stdout(`${JSON.stringify(plan, null, 2)}\n`);
