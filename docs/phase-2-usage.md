@@ -98,7 +98,7 @@ Once an unpacked MetaMask artifact exists at the pinned default path or `METAMAS
 pnpm wallet:smoke:metamask
 ```
 
-This script builds `@agent-browser-wallet/wallet-browser`, launches real Playwright Chromium with a persistent user data directory and the unpacked MetaMask extension loaded, opens a normal browser smoke page, opens or discovers the MetaMask extension UI (`chrome-extension://<id>/home.html` / notification pages), captures screenshots, prints JSON metadata, and closes the browser context. Screenshots are written under ignored `.wallet-artifacts/metamask-smoke/<timestamp>/` because browser screenshots/traces are treated as sensitive until manually inspected.
+This script builds `@agent-browser-wallet/fixture-dapp` and `@agent-browser-wallet/wallet-browser`, launches real Playwright Chromium with a persistent user data directory and the unpacked MetaMask extension loaded, opens the fixture dapp as the normal browser page without connecting it to a wallet, opens or discovers the MetaMask extension UI (`chrome-extension://<id>/home.html` / notification pages), captures screenshots, prints JSON metadata, and closes the browser context. Screenshots are written under ignored `.wallet-artifacts/metamask-smoke/<timestamp>/` because browser screenshots/traces are treated as sensitive until manually inspected.
 
 If a real MetaMask artifact is not available, use the generated fixture-extension smoke only to verify the Chromium extension-loading mechanics:
 

@@ -1,5 +1,6 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { pathToFileURL } from 'node:url';
 
 import type { BrowserContext, Page } from 'playwright';
 
@@ -36,7 +37,7 @@ export async function captureMetaMaskSmokeScreenshots(options: MetaMaskSmokeOpti
 
   const { context } = await launchWalletBrowser({ cwd, env: options.env });
   try {
-    const browserPage = await openBrowserSmokePage(context);
+    const browserPage = await openBrowserSmokePage(context, cwd);
     const extensionPage = await openOrDiscoverMetaMaskPage(context);
 
     const screenshots: MetaMaskSmokeScreenshot[] = [
@@ -88,8 +89,14 @@ export async function captureFixtureExtensionSmokeScreenshots(options: MetaMaskS
   };
 }
 
-async function openBrowserSmokePage(context: BrowserContext): Promise<Page> {
+async function openBrowserSmokePage(context: BrowserContext, cwd: string): Promise<Page> {
   const page = await context.newPage();
+  const fixtureDappUrl = resolveDefaultFixtureDappSmokeUrl(cwd);
+  if (fixtureDappUrl) {
+    await page.goto(fixtureDappUrl, { waitUntil: 'domcontentloaded' });
+    return page;
+  }
+
   await page.setContent(`<!doctype html>
 <title>Agent Browser Wallet MetaMask Smoke</title>
 <main style="font-family: system-ui, sans-serif; padding: 2rem; max-width: 52rem;">
@@ -110,6 +117,11 @@ async function openOrDiscoverMetaMaskPage(context: BrowserContext): Promise<Page
   const page = await context.newPage();
   await page.goto(`chrome-extension://${extensionId}/home.html`);
   return page;
+}
+
+export function resolveDefaultFixtureDappSmokeUrl(cwd: string): string | undefined {
+  const fixtureDappIndex = resolve(cwd, 'apps', 'fixture-dapp', 'index.html');
+  return existsSync(fixtureDappIndex) ? pathToFileURL(fixtureDappIndex).toString() : undefined;
 }
 
 function createFixtureExtension(extensionPath: string): void {
