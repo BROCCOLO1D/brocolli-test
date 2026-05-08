@@ -98,7 +98,7 @@ Once an unpacked MetaMask artifact exists at the pinned default path or `METAMAS
 pnpm wallet:smoke:metamask
 ```
 
-This script builds `@agent-browser-wallet/fixture-dapp` and `@agent-browser-wallet/wallet-browser`, launches real Playwright Chromium with a persistent user data directory and the unpacked MetaMask extension loaded, opens the fixture dapp as the normal browser page without connecting it to a wallet, opens or discovers the MetaMask extension UI (`chrome-extension://<id>/home.html` / notification pages), captures screenshots, prints JSON metadata, and closes the browser context. Screenshots are written under ignored `.wallet-artifacts/metamask-smoke/<timestamp>/` because browser screenshots/traces are treated as sensitive until manually inspected.
+This script builds `@agent-browser-wallet/fixture-dapp` and `@agent-browser-wallet/wallet-browser`, launches real Playwright Chromium with a persistent user data directory and the unpacked MetaMask extension loaded, opens the fixture dapp as the normal browser page without connecting it to a wallet, opens or discovers the MetaMask extension UI (`chrome-extension://<id>/home.html` / notification pages), captures screenshots, writes an `INSPECTION.md` visual-review checklist next to the screenshots, prints JSON metadata, and closes the browser context. Screenshots are written under ignored `.wallet-artifacts/metamask-smoke/<timestamp>/` because browser screenshots/traces are treated as sensitive until manually inspected.
 
 If a real MetaMask artifact is not available, use the generated fixture-extension smoke only to verify the Chromium extension-loading mechanics:
 
@@ -106,7 +106,7 @@ If a real MetaMask artifact is not available, use the generated fixture-extensio
 pnpm wallet:smoke:fixture-extension
 ```
 
-The fixture command creates an ignored unpacked extension under `.wallet-artifacts/fixture-extension-smoke/<timestamp>/fixture-extension/`, launches it through the same Chromium persistent-context foundation, and captures `browser-page.png` plus `fixture-extension.png`. The fixture page is intentionally labeled **not MetaMask UI**; do not use it as evidence of MetaMask onboarding, wallet connection, signing, or transaction support. Like the real MetaMask smoke path, this launches a headed Chromium instance so Linux/CI environments without a display should run it under `xvfb-run` rather than expecting headless extension UI screenshots.
+The fixture command creates an ignored unpacked extension under `.wallet-artifacts/fixture-extension-smoke/<timestamp>/fixture-extension/`, launches it through the same Chromium persistent-context foundation, and captures `browser-page.png` plus `fixture-extension.png` with an adjacent `INSPECTION.md` checklist. The fixture page is intentionally labeled **not MetaMask UI**; do not use it as evidence of MetaMask onboarding, wallet connection, signing, or transaction support. Like the real MetaMask smoke path, this launches a headed Chromium instance so Linux/CI environments without a display should run it under `xvfb-run` rather than expecting headless extension UI screenshots.
 
 Safety boundaries for this milestone:
 

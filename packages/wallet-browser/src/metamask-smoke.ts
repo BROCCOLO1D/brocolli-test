@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import type { BrowserContext, Page } from 'playwright';
@@ -24,7 +24,14 @@ export interface MetaMaskSmokeResult {
   status: 'captured';
   artifactDir: string;
   screenshots: MetaMaskSmokeScreenshot[];
+  inspectionGuidePath: string;
   notes: string[];
+}
+
+interface SmokeInspectionGuideOptions {
+  artifactDir: string;
+  screenshots: readonly MetaMaskSmokeScreenshot[];
+  notes: readonly string[];
 }
 
 export type RunMetaMaskSmoke = (options: MetaMaskSmokeOptions) => Promise<MetaMaskSmokeResult>;
@@ -48,14 +55,18 @@ export async function captureMetaMaskSmokeScreenshots(options: MetaMaskSmokeOpti
     await browserPage.screenshot({ path: screenshots[0].path, fullPage: true });
     await extensionPage.screenshot({ path: screenshots[1].path, fullPage: true });
 
+    const notes = [
+      'No wallet was imported, unlocked, connected, used to sign, or used to transact.',
+      'Treat generated screenshots as local-only until visually inspected for sensitive content.'
+    ];
+    const inspectionGuidePath = writeSmokeInspectionGuide({ artifactDir, screenshots, notes });
+
     return {
       status: 'captured',
       artifactDir,
       screenshots,
-      notes: [
-        'No wallet was imported, unlocked, connected, used to sign, or used to transact.',
-        'Treat generated screenshots as local-only until visually inspected for sensitive content.'
-      ]
+      inspectionGuidePath,
+      notes
     };
   } finally {
     await context.close();
@@ -122,6 +133,34 @@ async function openOrDiscoverMetaMaskPage(context: BrowserContext): Promise<Page
 export function resolveDefaultFixtureDappSmokeUrl(cwd: string): string | undefined {
   const fixtureDappIndex = resolve(cwd, 'apps', 'fixture-dapp', 'index.html');
   return existsSync(fixtureDappIndex) ? pathToFileURL(fixtureDappIndex).toString() : undefined;
+}
+
+export function writeSmokeInspectionGuide(options: SmokeInspectionGuideOptions): string {
+  const guidePath = join(options.artifactDir, 'INSPECTION.md');
+  const checklist = options.screenshots.map((screenshot) => {
+    const fileName = basename(screenshot.path);
+    return `- [ ] Confirm \`${fileName}\` contains no seed phrases, private keys, passwords, RPC tokens, full wallet addresses, or sensitive local paths.`;
+  });
+  const notes = options.notes.map((note) => `- ${note}`);
+  writeFileSync(
+    guidePath,
+    `# Wallet browser smoke screenshot inspection
+
+These screenshots are local-only evidence until reviewed. Do not commit or publish them by default.
+
+## Required visual checks
+
+${checklist.join('\n')}
+- [ ] Confirm the screenshots do not show wallet import, unlock, account connection, signature approval, or transaction approval state.
+
+## Smoke notes
+
+${notes.join('\n')}
+
+Keep this artifact directory ignored/local-only unless every screenshot above is reviewed and intentionally promoted.
+`
+  );
+  return guidePath;
 }
 
 function createFixtureExtension(extensionPath: string): void {

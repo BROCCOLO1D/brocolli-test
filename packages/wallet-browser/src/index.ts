@@ -25,6 +25,7 @@ export {
   captureFixtureExtensionSmokeScreenshots,
   captureMetaMaskSmokeScreenshots,
   resolveDefaultFixtureDappSmokeUrl,
+  writeSmokeInspectionGuide,
   type MetaMaskSmokeOptions,
   type MetaMaskSmokeResult,
   type MetaMaskSmokeScreenshot,
