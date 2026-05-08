@@ -57,6 +57,43 @@ describe('runWalletBrowserCli', () => {
     expect(output).not.toContain('do-not-print-this-password');
   });
 
+  it('runs an injected fixture extension smoke capture and labels it as extension-loading mechanics only', async () => {
+    const cwd = await tempRoot();
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const calls: Array<{ cwd?: string; envKeys: string[] }> = [];
+
+    const exitCode = await runWalletBrowserCli({
+      argv: ['smoke-fixture-extension'],
+      cwd,
+      env: { METAMASK_PASSWORD: 'do-not-print-this-password' },
+      runFixtureExtensionSmoke: async (options) => {
+        calls.push({ cwd: options.cwd, envKeys: Object.keys(options.env ?? {}).sort() });
+        return {
+          status: 'captured',
+          artifactDir: join(cwd, '.wallet-artifacts', 'fixture-extension-smoke', 'run'),
+          screenshots: [
+            { label: 'browser-page', path: join(cwd, '.wallet-artifacts', 'fixture-extension-smoke', 'run', 'browser-page.png') },
+            { label: 'fixture-extension', path: join(cwd, '.wallet-artifacts', 'fixture-extension-smoke', 'run', 'fixture-extension.png') }
+          ],
+          notes: ['Fixture extension smoke proves Chromium extension-loading mechanics only; it is not MetaMask UI.']
+        };
+      },
+      stdout: (message) => stdout.push(message),
+      stderr: (message) => stderr.push(message)
+    });
+
+    expect(exitCode).toBe(0);
+    expect(stderr).toEqual([]);
+    expect(calls).toEqual([{ cwd, envKeys: ['METAMASK_PASSWORD'] }]);
+    const output = stdout.join('');
+    const result = JSON.parse(output) as { artifactDir: string; screenshots: Array<{ label: string }>; notes: string[] };
+    expect(result.artifactDir).toContain('.wallet-artifacts/fixture-extension-smoke');
+    expect(result.screenshots.map((screenshot) => screenshot.label)).toEqual(['browser-page', 'fixture-extension']);
+    expect(result.notes.join(' ')).toContain('not MetaMask UI');
+    expect(output).not.toContain('do-not-print-this-password');
+  });
+
   it('prints a sanitized launch plan without launching Chromium or exposing wallet secrets', async () => {
     const cwd = await tempRoot();
     const extensionPath = join(cwd, 'metamask');

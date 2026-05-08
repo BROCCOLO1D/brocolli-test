@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
 import type { BrowserContext, Page } from 'playwright';
@@ -11,10 +11,11 @@ export interface MetaMaskSmokeOptions {
   cwd?: string;
   env?: WalletBrowserEnv;
   artifactDir?: string;
+  extensionScreenshotLabel?: 'metamask-extension' | 'fixture-extension';
 }
 
 export interface MetaMaskSmokeScreenshot {
-  label: 'browser-page' | 'metamask-extension';
+  label: 'browser-page' | 'metamask-extension' | 'fixture-extension';
   path: string;
 }
 
@@ -30,6 +31,7 @@ export type RunMetaMaskSmoke = (options: MetaMaskSmokeOptions) => Promise<MetaMa
 export async function captureMetaMaskSmokeScreenshots(options: MetaMaskSmokeOptions = {}): Promise<MetaMaskSmokeResult> {
   const cwd = options.cwd ?? process.cwd();
   const artifactDir = resolve(cwd, options.artifactDir ?? join('.wallet-artifacts', 'metamask-smoke', safeTimestamp()));
+  const extensionScreenshotLabel = options.extensionScreenshotLabel ?? 'metamask-extension';
   mkdirSync(artifactDir, { recursive: true });
 
   const { context } = await launchWalletBrowser({ cwd, env: options.env });
@@ -39,7 +41,7 @@ export async function captureMetaMaskSmokeScreenshots(options: MetaMaskSmokeOpti
 
     const screenshots: MetaMaskSmokeScreenshot[] = [
       { label: 'browser-page', path: join(artifactDir, 'browser-page.png') },
-      { label: 'metamask-extension', path: join(artifactDir, 'metamask-extension.png') }
+      { label: extensionScreenshotLabel, path: join(artifactDir, `${extensionScreenshotLabel}.png`) }
     ];
 
     await browserPage.screenshot({ path: screenshots[0].path, fullPage: true });
@@ -57,6 +59,33 @@ export async function captureMetaMaskSmokeScreenshots(options: MetaMaskSmokeOpti
   } finally {
     await context.close();
   }
+}
+
+export async function captureFixtureExtensionSmokeScreenshots(options: MetaMaskSmokeOptions = {}): Promise<MetaMaskSmokeResult> {
+  const cwd = options.cwd ?? process.cwd();
+  const artifactDir = resolve(cwd, options.artifactDir ?? join('.wallet-artifacts', 'fixture-extension-smoke', safeTimestamp()));
+  const extensionPath = join(artifactDir, 'fixture-extension');
+  createFixtureExtension(extensionPath);
+
+  const result = await captureMetaMaskSmokeScreenshots({
+    cwd,
+    artifactDir,
+    env: {
+      ...options.env,
+      METAMASK_EXTENSION_PATH: extensionPath,
+      WALLET_PROFILE_DIR: join(artifactDir, 'profile')
+    },
+    extensionScreenshotLabel: 'fixture-extension'
+  });
+
+  return {
+    ...result,
+    notes: [
+      'Fixture extension smoke proves Chromium extension-loading mechanics only; it is not MetaMask UI.',
+      'The generated fixture manifest identifies as MetaMask only to exercise the same launcher validation path without downloading the real bundle.',
+      ...result.notes
+    ]
+  };
 }
 
 async function openBrowserSmokePage(context: BrowserContext): Promise<Page> {
@@ -81,6 +110,36 @@ async function openOrDiscoverMetaMaskPage(context: BrowserContext): Promise<Page
   const page = await context.newPage();
   await page.goto(`chrome-extension://${extensionId}/home.html`);
   return page;
+}
+
+function createFixtureExtension(extensionPath: string): void {
+  mkdirSync(extensionPath, { recursive: true });
+  writeFileSync(
+    join(extensionPath, 'manifest.json'),
+    `${JSON.stringify(
+      {
+        manifest_version: 3,
+        name: 'MetaMask',
+        short_name: 'MetaMask',
+        version: '0.0.0',
+        background: { service_worker: 'service-worker.js' },
+        action: { default_title: 'Fixture extension' }
+      },
+      null,
+      2
+    )}\n`
+  );
+  writeFileSync(join(extensionPath, 'service-worker.js'), "chrome.runtime.onInstalled.addListener(() => undefined);\n");
+  writeFileSync(
+    join(extensionPath, 'home.html'),
+    `<!doctype html>
+<title>Fixture extension smoke</title>
+<main style="font-family: system-ui, sans-serif; padding: 2rem; max-width: 48rem;">
+  <h1>Fixture extension loading smoke</h1>
+  <p>This generated extension proves Chromium loaded an unpacked extension in a persistent context.</p>
+  <p><strong>This is not MetaMask UI.</strong> It does not import, unlock, connect, sign, or transact.</p>
+</main>`
+  );
 }
 
 function tryDiscoverMetaMaskPage(pages: readonly Page[]): Page | undefined {

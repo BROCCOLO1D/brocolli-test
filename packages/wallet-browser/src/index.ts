@@ -22,6 +22,7 @@ export {
 } from './extension-pages.js';
 
 export {
+  captureFixtureExtensionSmokeScreenshots,
   captureMetaMaskSmokeScreenshots,
   type MetaMaskSmokeOptions,
   type MetaMaskSmokeResult,
