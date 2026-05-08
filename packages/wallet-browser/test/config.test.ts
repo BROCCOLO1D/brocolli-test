@@ -103,6 +103,28 @@ describe('resolveWalletBrowserConfig', () => {
     expect(Object.keys(config)).not.toContain('walletPassword');
   });
 
+  it('rejects unsafe profile directories that point at the project root', () => {
+    const cwd = tempRoot();
+    const extensionPath = join(cwd, 'extension');
+    mkdirSync(extensionPath, { recursive: true });
+    writeFileSync(join(extensionPath, 'manifest.json'), JSON.stringify({ manifest_version: 3, name: 'MetaMask' }));
+
+    expect(() => resolveWalletBrowserConfig({ cwd, env: { METAMASK_EXTENSION_PATH: extensionPath, WALLET_PROFILE_DIR: cwd } })).toThrow(
+      /Wallet browser profile directory is unsafe/
+    );
+  });
+
+  it('rejects unsafe profile directories that overlap the MetaMask extension artifact', () => {
+    const cwd = tempRoot();
+    const extensionPath = join(cwd, 'extension');
+    mkdirSync(extensionPath, { recursive: true });
+    writeFileSync(join(extensionPath, 'manifest.json'), JSON.stringify({ manifest_version: 3, name: 'MetaMask' }));
+
+    expect(() =>
+      resolveWalletBrowserConfig({ cwd, env: { METAMASK_EXTENSION_PATH: extensionPath, WALLET_PROFILE_DIR: join(extensionPath, 'profile') } })
+    ).toThrow(/Wallet browser profile directory must not overlap the MetaMask extension path/);
+  });
+
   it('rejects extension directories without a manifest before preparing Chromium launch options', () => {
     const cwd = tempRoot();
     const extensionPath = join(cwd, 'extension-without-manifest');

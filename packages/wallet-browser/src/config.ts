@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { isAbsolute, join, parse, relative, resolve, sep } from 'node:path';
 
 export const PINNED_METAMASK_VERSION = '13.29.0';
 
@@ -68,6 +68,7 @@ export function resolveWalletBrowserConfig(options: ResolveWalletBrowserConfigOp
 
   const profileName = sanitizeProfileName(options.profileName ?? env.WALLET_PROFILE_NAME ?? DEFAULT_PROFILE_NAME);
   const profileDir = resolve(cwd, options.profileDir ?? env.WALLET_PROFILE_DIR ?? `.wallet-profiles/${profileName}`);
+  assertSafeProfileDir(profileDir, cwd, metamaskExtensionPath);
   mkdirSync(profileDir, { recursive: true });
   assertDirectory(profileDir, 'Wallet browser profile directory');
 
@@ -96,6 +97,22 @@ function assertDirectory(path: string, label: string): void {
   if (!statSync(path).isDirectory()) {
     throw new Error(`${label} must be a directory: ${path}`);
   }
+}
+
+function assertSafeProfileDir(profileDir: string, cwd: string, metamaskExtensionPath: string): void {
+  const root = parse(profileDir).root;
+  if (profileDir === root || profileDir === resolve(cwd)) {
+    throw new Error('Wallet browser profile directory is unsafe; use an isolated directory under .wallet-profiles or an explicit wallet profile root.');
+  }
+
+  if (isSamePathOrChild(profileDir, metamaskExtensionPath) || isSamePathOrChild(metamaskExtensionPath, profileDir)) {
+    throw new Error('Wallet browser profile directory must not overlap the MetaMask extension path.');
+  }
+}
+
+function isSamePathOrChild(candidatePath: string, parentPath: string): boolean {
+  const relation = relative(parentPath, candidatePath);
+  return relation === '' || (!relation.startsWith('..') && !isAbsolute(relation) && !relation.startsWith(sep));
 }
 
 function readMetaMaskManifestIdentity(extensionPath: string): MetaMaskExtensionIdentity {

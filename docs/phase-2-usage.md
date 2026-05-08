@@ -85,7 +85,7 @@ The command prints JSON with Chromium launch metadata such as `userDataDir`, ext
 ## Acceptance for this foundation
 
 - Node, pnpm, Playwright, TypeScript, and Vitest versions are pinned in committed package files and lockfile.
-- `@agent-browser-wallet/wallet-browser` resolves a MetaMask extension directory from env/config or the pinned default artifact path, validates that an unpacked MetaMask Manifest V3 extension manifest exists, resolves Chrome `__MSG_...__` localized names from `_locales/<default_locale>/messages.json`, and creates an isolated profile directory.
+- `@agent-browser-wallet/wallet-browser` resolves a MetaMask extension directory from env/config or the pinned default artifact path, validates that an unpacked MetaMask Manifest V3 extension manifest exists, resolves Chrome `__MSG_...__` localized names from `_locales/<default_locale>/messages.json`, creates an isolated profile directory, and rejects profile paths that point at the project root or overlap the extension artifact.
 - Launch options are Chromium-only, use a persistent context user data directory, and include MetaMask extension flags.
 - The CLI `wallet-browser prepare` command exposes the same prepared launch plan in machine-readable JSON without launching Chromium.
 - Missing extension config fails closed before launch.
