@@ -11,8 +11,6 @@
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
-    "docs:assets": "node scripts/capture-readme-assets.mjs",
-    "docs:assets:real-sepolia": "node scripts/capture-real-sepolia-readme-asset.mjs",
     "wallet:smoke:metamask": "pnpm --filter @agent-browser-wallet/fixture-dapp build && pnpm --filter @agent-browser-wallet/wallet-browser build && node packages/wallet-browser/dist/cli.js smoke-metamask",
     "wallet:smoke:fixture-extension": "pnpm --filter @agent-browser-wallet/wallet-browser build && node packages/wallet-browser/dist/cli.js smoke-fixture-extension",
     "wallet:smoke:verify": "pnpm --filter @agent-browser-wallet/wallet-browser build && node packages/wallet-browser/dist/cli.js verify-smoke-artifacts",

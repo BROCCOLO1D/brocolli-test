@@ -1,84 +1,93 @@
-# agent-browser-wallet
+# Agent Browser Wallet
 
-Real browser-wallet automation for AI agents and dapp test harnesses.
+Web3 QA automation for real browser-wallet flows.
 
-This repo is now focused on a concrete path: **Playwright + persistent Chromium + pinned MetaMask + isolated burner/testnet profiles**. The goal is to let an agent drive a dapp in the same kind of browser a real user has: one with a wallet extension installed, wallet prompts, chain switching, account assertions, screenshots, and safety guardrails.
+Agent Browser Wallet is a Playwright/Chromium harness for testing dapps through a real wallet extension instead of a mocked provider. It launches Chromium with MetaMask, prepares an isolated burner wallet profile, drives dapp UI, handles wallet prompts through fail-closed guardrails, and writes redacted proof artifacts that can be verified after a run.
 
-## Current target
+The project focus is now narrow and product-oriented:
 
-- **Runner:** Playwright
-- **Browser:** Chromium persistent contexts, because extension support requires a real profile
-- **Wallet:** pinned MetaMask extension artifact, downloaded locally and ignored by Git
-- **First dapp:** local fixture dapp for deterministic connect/sign/send tests
-- **Live target:** `https://testnet.wildcat.finance/lender` on Sepolia
-- **Wallet policy:** burner/testnet only; no production wallets or mainnet funds
+> Help dapp teams and agent builders run repeatable, safe QA checks for wallet connection, chain switching, signature prompts, transaction prompts, and dapp state using the same browser-wallet path a user would use.
 
-## What works today
+## Why this exists
 
-### CI-safe / committed
+Most Web3 QA either mocks `window.ethereum` or relies on manual wallet testing. That misses the failure modes users actually hit:
 
-- `wallet-browser prepare` validates MetaMask extension/profile launch config and prints a sanitized persistent-context plan.
-- `wallet-browser smoke-metamask` launches real Chromium with the pinned MetaMask extension and captures local-only smoke screenshots.
-- `wallet-browser smoke-fixture-extension` launches the fixture dapp beside the extension in the same persistent context.
-- `wallet-browser verify-smoke-artifacts` checks local screenshot manifests against captured files.
-- The package exposes a CI-safe fixture connection proof harness that composes wallet-control connection approval, Sepolia/account verification, post-verification screenshot capture, and local-only proof manifest generation for the later real Chromium runner.
-- `wallet-browser verify-fixture-proof` validates fixture connection proof manifests, requiring connected state, masked account evidence, Sepolia chain `11155111`, safe screenshot basenames, and matching screenshot hashes before a proof can be accepted; CLI output redacts local artifact and manifest paths.
-- `wallet-browser profile-bootstrap-import --dry-run` validates burner import/profile inputs and writes a sanitized local manifest without launching a browser or entering secrets.
-- The fixture dapp has stable selectors and mocked-provider tests for connect, signature, zero-value transaction, account/chain events, and guardrail rejection.
-- Wallet-control helper modules model connect/sign/send/network/account guardrails with redacted structured logs.
-- MetaMask page discovery handles `home.html` and `notification.html`, stale/closed page handles, preferred prompt-page selection, context re-querying, and optional keeper-page creation.
-- MetaMask connection prompt approval has a CI-safe driver that discovers `notification.html`, verifies the prompt looks like an origin-matching connect request, and fails closed on transaction/signature/unknown prompt text before clicking.
-- `wallet-browser wildcat-lender-plan` prints a deterministic local-only Wildcat lender recipe for `https://testnet.wildcat.finance/lender`, including modal/connect/MetaMask steps, Sepolia/account/origin guardrails, zero-wei cap, and ignored artifact path guidance without launching a browser.
-- `wallet-browser verify-wildcat-lender-artifacts` validates local Wildcat manifests for either connected proof or a redacted known-blocker failure, rejecting full addresses, local paths, wrong chains/origins, unsafe screenshot names, and hash mismatches.
-- Sensitive artifacts are ignored by default: `.env`, `.wallet-extensions/`, `.wallet-profiles/`, `.wallet-artifacts/`, traces, reports, and local audit logs.
+- broken wallet connect modals;
+- stale or hidden MetaMask popups;
+- wrong-chain flows;
+- account mismatch bugs;
+- signature and transaction prompts that ask for more than expected;
+- dapp UI that says connected while provider state disagrees.
 
-### Local-only / dogfooded
+This repo is building a safer middle layer: real browser, real wallet extension, real dapp, explicit policy, auditable proof.
 
-Using ignored local secrets and artifacts, we have proven:
+## Product pillars
 
-- real Chromium can load real MetaMask;
-- the Sepolia burner can be imported into MetaMask as `Imported Account 1`;
-- the active MetaMask account can show the masked burner `0x81611...34B61` without exposing the full private key, seed phrase, password, or full address;
-- Wildcat testnet loads and opens its wallet chooser after clicking **Connect Wallet**.
+1. **Real wallet runtime**  
+   Persistent Chromium context + pinned MetaMask extension + isolated burner/testnet profile.
 
-Still in progress:
+2. **Dapp QA flows**  
+   Reusable checks for connect, chain/account assertion, prompt classification, signature rejection/approval, and transaction guardrails.
 
-- completing the MetaMask connection approval for fixture dapp and Wildcat;
-- wiring the real browser import runner behind the new `profile-bootstrap-import` dry-run manifest path.
+3. **Policy before clicks**  
+   Every wallet action is bounded by expected origin, chain, account, prompt type, target, and value.
 
-## Screenshots and evidence
+4. **Proof artifacts**  
+   Runs produce local-only screenshots, manifests, hashes, and redacted diagnostics. Verifiers reject wrong chains, wrong origins, missing screenshots, path leaks, and full-address leaks.
 
-Committed README images are public-safe mocked-provider or masked public Sepolia evidence.
+5. **Agent-ready interface**  
+   The long-term shape is a CLI/library that agents and CI jobs can call without hand-scripting MetaMask each time.
 
-<p align="center">
-  <img src="docs/assets/readme/fixture-connected-actions.png" width="760" alt="Fixture dapp after connecting a mocked Sepolia wallet, signing a message, and submitting a zero-value transaction">
-</p>
+## Current status
 
-<p align="center">
-  <img src="docs/assets/readme/fixture-guardrail-rejected.png" width="760" alt="Fixture dapp rejecting a transaction attempt on an unsupported chain">
-</p>
+Working today:
 
-<p align="center">
-  <img src="docs/assets/readme/fixture-real-sepolia-burner.png" width="760" alt="Fixture dapp connected to the masked real Sepolia burner wallet with a public balance check">
-</p>
+- TypeScript/pnpm workspace with fixture dapp and wallet-browser package.
+- MetaMask extension fetcher for ignored local extension artifacts.
+- Persistent Chromium + MetaMask smoke commands.
+- Wallet config, onboarding, network, prompt, guardrail, and proof-verifier modules.
+- Fixture dapp with mocked-provider tests for connect, signing, zero-value transaction, account/chain events, and guardrail failures.
+- Local live runner for fixture dapp connection through real Chromium + MetaMask.
+- Local live runner for Wildcat testnet lender connection through real Chromium + MetaMask.
+- Redacted proof verification for fixture and Wildcat connection artifacts.
+- Sensitive-content scan for tracked files and git history patches.
 
-Generate public-safe mocked screenshots:
+Local dogfood already proved:
 
-```bash
-pnpm docs:assets
+- Chromium can load real MetaMask under Xvfb.
+- A Sepolia burner wallet can be imported from ignored `.env`.
+- The fixture dapp can connect to MetaMask on Sepolia and produce verified proof.
+- `https://testnet.wildcat.finance/lender` can connect to MetaMask on Sepolia and produce verified proof.
+- The Wildcat flow stops before terms signing, message signing, or transactions.
+
+## Repository layout
+
+```text
+apps/fixture-dapp/                 # Minimal dapp used for deterministic QA flows
+packages/wallet-browser/           # Core config, network, prompt, guardrail, proof helpers
+scripts/live-fixture-connect.mjs   # Local real-wallet fixture connection runner
+scripts/live-wildcat-connect.mjs   # Local real-wallet Wildcat connection runner
+scripts/fetch-metamask-extension.py
+scripts/sensitive-scan.py
+docs/product-roadmap.md            # Product direction and buildout plan
+docs/security-and-artifacts.md     # Safety policy for secrets, profiles, traces, screenshots
 ```
 
-Generate the local masked Sepolia burner screenshot:
+Ignored local runtime directories:
 
-```bash
-pnpm docs:assets:real-sepolia
+```text
+.env
+.wallet-extensions/
+.wallet-profiles/
+.wallet-artifacts/
+playwright-report/
+test-results/
+traces/
 ```
 
-Real MetaMask/Wildcat screenshots are treated as local-sensitive artifacts until inspected. They live under `.wallet-artifacts/` and should not be committed unless explicitly scrubbed.
+## Quickstart
 
-## Try it
-
-Install and run the baseline checks:
+Install and verify the committed code:
 
 ```bash
 pnpm install --frozen-lockfile
@@ -95,94 +104,76 @@ pnpm wallet:metamask:fetch --dry-run
 pnpm wallet:metamask:fetch
 ```
 
-Run headed browser smoke tests in WSL/Linux with Xvfb:
-
-```bash
-xvfb-run -a pnpm wallet:smoke:metamask
-xvfb-run -a pnpm wallet:smoke:fixture-extension
-pnpm wallet:smoke:verify .wallet-artifacts/metamask-smoke/<run-id>
-pnpm --filter @agent-browser-wallet/wallet-browser cli verify-fixture-proof .wallet-artifacts/fixture-connection-proof/<run-id>
-pnpm --filter @agent-browser-wallet/wallet-browser cli verify-wildcat-lender-artifacts .wallet-artifacts/wildcat-lender/<run-id>
-```
-
-Inspect sanitized plans:
+Run non-secret smoke/config commands:
 
 ```bash
 pnpm --filter @agent-browser-wallet/wallet-browser cli --help
 pnpm --filter @agent-browser-wallet/wallet-browser cli prepare
-pnpm --filter @agent-browser-wallet/wallet-browser cli onboarding-plan
-pnpm --filter @agent-browser-wallet/wallet-browser cli profile-bootstrap-import --dry-run
-pnpm --filter @agent-browser-wallet/wallet-browser cli network-plan
-pnpm --filter @agent-browser-wallet/wallet-browser cli wildcat-lender-plan
+pnpm wallet:smoke:metamask
+pnpm wallet:smoke:fixture-extension
 ```
 
-Serve the fixture dapp:
+On Linux/WSL/CI without a display, wrap real browser commands with Xvfb:
 
 ```bash
-pnpm fixture:build
-pnpm fixture:serve
+xvfb-run -a pnpm wallet:smoke:metamask
 ```
 
-Then open `http://127.0.0.1:5173`.
+## Local live QA runs
 
-## Local secret setup
-
-Copy `.env.example` to `.env` and use only testnet/burner values:
+Create a local burner/testnet config:
 
 ```bash
 cp .env.example .env
 chmod 600 .env
 ```
 
-Important variables:
+Fill only burner/testnet values. Never use production wallets.
 
-- `SEPOLIA_WALLET_ADDRESS`
-- `SEPOLIA_WALLET_PRIVATE_KEY`
-- `SEPOLIA_RPC_URL` optional/custom RPC
-- `SEPOLIA_CHAIN_ID=11155111`
-- `METAMASK_PASSWORD`
-- `WALLET_PROFILE_DIR`
-- `METAMASK_EXTENSION_DIR`
+Run the fixture dapp live connection proof:
 
-Never commit `.env`, wallet profiles, extension bundles, traces, Playwright reports, screenshot artifacts, or local audit logs.
+```bash
+pnpm fixture:build
+pnpm fixture:serve
+# in another shell:
+xvfb-run -a pnpm wallet:live:fixture-connect
+```
 
-## Suggested 5-step plan
+Run the Wildcat testnet lender live connection proof:
 
-1. **Exercise connection prompt approval locally.** Use the CI-safe MetaMask prompt driver against a real pinned extension/profile, confirm the default selectors still match the current MetaMask build, and record any selector drift as local-only diagnostics.
-2. **Promote real burner onboarding/import runner.** Connect the dry-run `profile-bootstrap-import` manifest path to a real local-only runner that avoids screenshots during secret entry and verifies the active masked account.
-3. **Complete fixture dapp real-wallet connection.** Wire the real Chromium/MetaMask runner into the fixture proof harness, use the imported burner profile to connect the local fixture dapp, assert `eth_accounts` and chain, capture inspected local screenshots only after verification, and accept the run only when `verify-fixture-proof` passes against the generated `.wallet-artifacts/fixture-connection-proof/<run-id>/FIXTURE-PROOF-MANIFEST.json` evidence.
-4. **Complete Wildcat lender connection.** Start from the deterministic `wildcat-lender-plan` recipe, drive `https://testnet.wildcat.finance/lender`, dismiss consent, choose MetaMask, approve connection through the shared prompt driver, verify the masked `0x8161…4b61` account on Sepolia, and capture a safe local-only screenshot/manifest under `.wallet-artifacts/wildcat-lender/<run-id>/`. Accept success only when `verify-wildcat-lender-artifacts` verifies connected proof; if the live site is flaky, preserve a redacted failed manifest with a known blocker and no secret-bearing screenshots.
-5. **Package an agent-facing command.** Add a single opt-in command such as `wallet-browser run --profile sepolia-burner --target wildcat-lender` that prepares the profile, enforces origin/chain/account guardrails, collects artifacts, and exits with a redacted status object.
+```bash
+xvfb-run -a pnpm wallet:live:wildcat-connect
+```
 
-## Overnight stretch plan
+Verify generated proof artifacts:
 
-If running unattended overnight, aim for one autonomous loop with strict safety limits:
-
-1. **No transaction approvals.** Only connect-wallet and read-only account/chain checks; reject sign/send prompts.
-2. **Retry prompt discovery variants.** Try MetaMask popup, notification page, extension home, and new-page events; record which selector/path worked.
-3. **Capture artifacts every attempt.** Save screenshots, sanitized page text, active URLs, and a redacted JSON manifest under `.wallet-artifacts/overnight-wildcat/<timestamp>/`.
-4. **Stop on first verified connection.** Verification requires Wildcat UI or provider state showing the expected masked burner account on Sepolia.
-5. **Summarize failure modes.** If connection still fails, produce a ranked list of blockers: connect-modal selection, MetaMask notification discovery, chain mismatch, page/context closure, or Wildcat-side provider state.
-
-Stretch goal: after a verified Wildcat connection screenshot, generalize the successful prompt path into a reusable `connectWallet()` driver and add mock tests for the discovered state machine before touching any transaction/signature flows.
+```bash
+node packages/wallet-browser/dist/cli.js verify-fixture-proof .wallet-artifacts/fixture-connect/<run-id>
+node packages/wallet-browser/dist/cli.js verify-wildcat-lender-artifacts .wallet-artifacts/wildcat-lender/<run-id>
+```
 
 ## Safety posture
 
 - Burner/testnet wallets only.
-- Fail closed on unexpected chain, account, origin, prompt type, target, or value.
+- Fail closed on unexpected origin, chain, account, prompt type, target, or value.
 - Default transaction value cap is zero wei.
-- Treat wallet profiles as secrets even if encrypted.
-- Treat screenshots/traces/reports as sensitive until inspected.
-- Redact private keys, seed phrases, wallet passwords, RPC tokens, full `.env` contents, and full wallet addresses from logs and public docs.
+- Refuse unknown signing or transaction prompts unless a specific policy allows them.
+- Treat wallet profiles, traces, screenshots, and videos as sensitive.
+- Never commit `.env`, wallet profiles, extension bundles, traces, reports, or local proof artifacts.
+- Redact private keys, seed phrases, wallet passwords, RPC tokens, full `.env` contents, sensitive local paths, and full wallet addresses from public logs/docs.
+
+## Product buildout path
+
+See [docs/product-roadmap.md](docs/product-roadmap.md) for the focused progression. The next milestone is to turn the proven live runners into a reusable QA scenario engine:
+
+```bash
+pnpm wallet qa connect --target fixture --policy policies/connect-only.json
+pnpm wallet qa connect --url https://testnet.wildcat.finance/lender --policy policies/wildcat-connect-only.json
+```
+
+That scenario engine should become the base for dapp QA suites, CI smoke tests, and eventually guarded signature/transaction workflows.
 
 ## Docs
 
-- [Phase 1 runtime matrix](docs/phase-1-runtime-matrix.md)
-- [Phase 2 usage and acceptance](docs/phase-2-usage.md)
-- [Phase 3 MetaMask onboarding usage](docs/phase-3-usage.md)
-- [Phase 4 Sepolia network provisioning usage](docs/phase-4-usage.md)
-- [Phase 5 fixture dapp usage](docs/phase-5-usage.md)
-- [Phase 6 wallet-control helper usage](docs/phase-6-usage.md)
-- [Phase 7 audit and safety guardrails](docs/phase-7-usage.md)
+- [Product roadmap](docs/product-roadmap.md)
 - [Security and artifact handling](docs/security-and-artifacts.md)
-- [High-level goals](docs/high-level-goals.md)
