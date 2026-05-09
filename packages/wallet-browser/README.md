@@ -2,26 +2,27 @@
 
 Core browser-wallet runtime helpers for dapp QA.
 
-This package owns launch configuration, MetaMask-oriented browser helpers, prompt guardrails, network/account assertions, local smoke artifacts, proof verification, and the `wallet-browser` CLI. It is the lower-level dependency used by `@broccolo1d/playwright`; use the Playwright package for ergonomic app-owned fixtures and public proof manifests.
+This lower-level package owns Chromium/MetaMask launch configuration, prompt guardrails, network/account assertions, local smoke artifacts, proof verification, and the `wallet-browser` CLI. Most app test suites should consume `@broccolo1d/playwright`; use this package directly for custom runners, package integrations, and low-level wallet runtime work.
 
 ## Install
 
 ```bash
-pnpm add -D @broccolo1d/wallet-browser playwright
+pnpm add -D @broccolo1d/wallet-browser@0.2.1 playwright
 ```
 
-The package is ESM-only and requires Node.js `>=22 <23`.
+ESM-only. Node.js `>=22 <23`.
 
 ## CLI
 
-Build before invoking the source CLI directly from the repository root:
+After install, the package exposes a `wallet-browser` binary:
 
 ```bash
-pnpm --filter @broccolo1d/wallet-browser build
-node packages/wallet-browser/dist/cli.js --help
+pnpm exec wallet-browser --help
+pnpm exec wallet-browser prepare
+pnpm exec wallet-browser verify-smoke-artifacts .wallet-artifacts/metamask-smoke/<run-id>
 ```
 
-From this repository root, use the convenience scripts:
+From this repository root, convenience scripts build the package first and resolve default `.wallet-*` paths consistently:
 
 ```bash
 pnpm wallet:cli --help
@@ -32,8 +33,6 @@ pnpm wallet:smoke:metamask
 pnpm wallet:smoke:fixture-extension
 pnpm wallet:smoke:verify
 ```
-
-The root convenience scripts build the package and invoke `packages/wallet-browser/dist/cli.js` from the repository root, so default `.wallet-*` paths resolve consistently. Fetch the pinned extension before `wallet:prepare` when using the default extension path.
 
 Commands:
 
@@ -48,7 +47,7 @@ wallet-browser profile-bootstrap-import --dry-run
 wallet-browser network-plan
 ```
 
-`verify-smoke-artifacts` accepts an explicit artifact directory. If omitted, it verifies the newest directory under `.wallet-artifacts/metamask-smoke/` or `.wallet-artifacts/fixture-extension-smoke/`.
+`prepare`, `onboarding-plan`, `network-plan`, and dry-run commands print redacted plans. The raw local output can still contain machine-specific paths; redact before sharing. `smoke-metamask` launches Chromium and captures local-only screenshots, but it does not import, unlock, connect, sign, or transact.
 
 ## API sketch
 
@@ -62,11 +61,12 @@ import {
   verifySmokeArtifactManifest
 } from '@broccolo1d/wallet-browser';
 
-const expectedAccount = '0x0000000000000000000000000000000000000000';
+const expectedAccount = process.env.SEPOLIA_WALLET_ADDRESS;
+if (!expectedAccount) throw new Error('SEPOLIA_WALLET_ADDRESS is required for wallet QA');
+
 const config = resolveWalletBrowserConfig();
 const { context } = await launchWalletBrowser({ config });
 
-// Replace with an app-provided network driver in real wallet jobs.
 const network: MetaMaskNetworkDriver = {
   async getChainId() { return 11155111; },
   async getAccounts() { return [expectedAccount]; },
@@ -74,20 +74,19 @@ const network: MetaMaskNetworkDriver = {
   async addEthereumChain() {}
 };
 
-const sepolia = resolveSepoliaNetworkConfig({ expectedAccount });
-
 try {
+  const sepolia = resolveSepoliaNetworkConfig({ expectedAccount });
   await assertExpectedChainAndAccount(sepolia, network);
 } finally {
   await context.close();
 }
 
-verifySmokeArtifactManifest('.wallet-artifacts/metamask-smoke/run-id');
+verifySmokeArtifactManifest('.wallet-artifacts/metamask-smoke/<run-id>');
 ```
 
 ## Configuration
 
-Use explicit options where possible. Environment-backed local runs use ignored `.env` files. Relevant keys include:
+Prefer explicit options in code. Environment-backed local runs should use ignored `.env` files. Relevant keys include:
 
 - `METAMASK_EXTENSION_PATH` or `METAMASK_EXTENSION_DIR`
 - `METAMASK_EXTENSION_VERSION`
@@ -101,11 +100,27 @@ Use explicit options where possible. Environment-backed local runs use ignored `
 
 Never commit `.env`, wallet profiles, extension bundles, traces, screenshots, videos, reports, or local proof artifacts.
 
+## Smoke and artifact verification
+
+```bash
+# Real browser smoke: local burner/testnet config only.
+xvfb-run -a pnpm exec wallet-browser smoke-metamask
+
+# Verify the newest smoke artifact directory.
+pnpm exec wallet-browser verify-smoke-artifacts
+
+# Verify one explicit run.
+pnpm exec wallet-browser verify-smoke-artifacts .wallet-artifacts/metamask-smoke/<run-id>
+```
+
+`verify-smoke-artifacts` checks manifest shape and attachment hash/size metadata. If no directory is supplied, it verifies the newest run under `.wallet-artifacts/metamask-smoke/` or `.wallet-artifacts/fixture-extension-smoke/`.
+
 ## Safety notes
 
-- Use burner/testnet wallets only.
-- `prepare`, `onboarding-plan`, `network-plan`, and dry-run commands print redacted plans.
-- Smoke commands launch Chromium and capture local-only screenshots, but do not import, unlock, connect, sign, or transact.
+- Burner/testnet wallets only.
+- Real wallet launch requires explicit configuration.
 - Prompt approval requires explicit prompt-driver support and guardrail policy.
 - Unknown prompts, signatures, and transactions fail closed unless intentionally supported by the caller.
-- The ergonomic Playwright helper layer verifies public manifests without storing full local paths or full wallet addresses.
+- Transaction value caps default to zero wei.
+- Plans and public manifests must not expose private keys, seed phrases, wallet passwords, RPC credentials, local paths, or full wallet addresses.
+- Raw screenshots, traces, videos, profiles, and extension bundles remain local unless reviewed and verified.
