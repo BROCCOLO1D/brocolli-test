@@ -76,17 +76,17 @@ Print the wallet-browser CLI help from the workspace root:
 pnpm wallet:cli --help
 ```
 
-Prepare and inspect a redacted Chromium/MetaMask launch plan. This does not launch Chromium:
-
-```bash
-pnpm wallet:prepare
-```
-
 Fetch the pinned MetaMask extension into ignored local storage:
 
 ```bash
 pnpm wallet:metamask:fetch --dry-run
 pnpm wallet:metamask:fetch
+```
+
+Prepare and inspect a redacted Chromium/MetaMask launch plan. This resolves paths from the repository root and does not launch Chromium:
+
+```bash
+pnpm wallet:prepare
 ```
 
 Run local smoke commands only with burner/testnet configuration. On Linux, WSL, or CI without a display, wrap real browser commands with Xvfb:
@@ -127,13 +127,29 @@ test('connects with explicit wallet policy', async ({ page, wallet, walletArtifa
 
 ```ts
 // playwright.config.ts
-import { defineWalletQaConfig } from '@broccolo1d/playwright';
+import { defineWalletQaConfig, type MetaMaskNetworkDriver, type WalletPromptDriver } from '@broccolo1d/playwright';
+
+const expectedAccount = '0x0000000000000000000000000000000000000000';
+
+// Replace these fake drivers with explicit prompt/network automation in real wallet jobs.
+const prompt: WalletPromptDriver = {
+  async approveConnection() {}
+};
+
+const network: MetaMaskNetworkDriver = {
+  async getChainId() { return 11155111; },
+  async getAccounts() { return [expectedAccount]; },
+  async switchChain() {},
+  async addEthereumChain() {}
+};
 
 export default defineWalletQaConfig({
   use: {
     walletConfig: {
       useRealWallet: false,
-      artifactDir: '.wallet-artifacts/playwright'
+      artifactDir: '.wallet-artifacts/playwright',
+      prompt,
+      network
     }
   }
 });
@@ -149,18 +165,27 @@ The lower-level package exposes runtime helpers for packages or apps that do not
 import {
   assertExpectedChainAndAccount,
   launchWalletBrowser,
+  type MetaMaskNetworkDriver,
+  resolveSepoliaNetworkConfig,
   resolveWalletBrowserConfig
 } from '@broccolo1d/wallet-browser';
 
+const expectedAccount = '0x0000000000000000000000000000000000000000';
 const config = resolveWalletBrowserConfig();
 const { context } = await launchWalletBrowser({ config });
 
+// Replace with an app-provided network driver in real wallet jobs.
+const network: MetaMaskNetworkDriver = {
+  async getChainId() { return 11155111; },
+  async getAccounts() { return [expectedAccount]; },
+  async switchChain() {},
+  async addEthereumChain() {}
+};
+
+const sepolia = resolveSepoliaNetworkConfig({ expectedAccount });
+
 try {
-  await assertExpectedChainAndAccount({
-    driver: /* app-provided network driver */,
-    expectedAccount: '0x0000000000000000000000000000000000000000',
-    expectedChainId: 11155111
-  });
+  await assertExpectedChainAndAccount(sepolia, network);
 } finally {
   await context.close();
 }

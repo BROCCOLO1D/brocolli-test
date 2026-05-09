@@ -14,22 +14,26 @@ The package is ESM-only and requires Node.js `>=22 <23`.
 
 ## CLI
 
-Build before invoking the workspace CLI from source:
+Build before invoking the source CLI directly from the repository root:
 
 ```bash
 pnpm --filter @broccolo1d/wallet-browser build
-pnpm --filter @broccolo1d/wallet-browser cli --help
+node packages/wallet-browser/dist/cli.js --help
 ```
 
 From this repository root, use the convenience scripts:
 
 ```bash
 pnpm wallet:cli --help
+pnpm wallet:metamask:fetch --dry-run
+pnpm wallet:metamask:fetch
 pnpm wallet:prepare
 pnpm wallet:smoke:metamask
 pnpm wallet:smoke:fixture-extension
 pnpm wallet:smoke:verify
 ```
+
+The root convenience scripts build the package and invoke `packages/wallet-browser/dist/cli.js` from the repository root, so default `.wallet-*` paths resolve consistently. Fetch the pinned extension before `wallet:prepare` when using the default extension path.
 
 Commands:
 
@@ -52,19 +56,28 @@ wallet-browser network-plan
 import {
   assertExpectedChainAndAccount,
   launchWalletBrowser,
+  type MetaMaskNetworkDriver,
+  resolveSepoliaNetworkConfig,
   resolveWalletBrowserConfig,
   verifySmokeArtifactManifest
 } from '@broccolo1d/wallet-browser';
 
+const expectedAccount = '0x0000000000000000000000000000000000000000';
 const config = resolveWalletBrowserConfig();
 const { context } = await launchWalletBrowser({ config });
 
+// Replace with an app-provided network driver in real wallet jobs.
+const network: MetaMaskNetworkDriver = {
+  async getChainId() { return 11155111; },
+  async getAccounts() { return [expectedAccount]; },
+  async switchChain() {},
+  async addEthereumChain() {}
+};
+
+const sepolia = resolveSepoliaNetworkConfig({ expectedAccount });
+
 try {
-  await assertExpectedChainAndAccount({
-    driver: /* app-provided network driver */,
-    expectedAccount: '0x0000000000000000000000000000000000000000',
-    expectedChainId: 11155111
-  });
+  await assertExpectedChainAndAccount(sepolia, network);
 } finally {
   await context.close();
 }

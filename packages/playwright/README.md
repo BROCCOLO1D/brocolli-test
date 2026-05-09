@@ -51,6 +51,36 @@ test('connects through wallet policy', async ({ page, wallet, walletArtifacts })
 });
 ```
 
+```ts
+// playwright.config.ts
+import { defineWalletQaConfig, type MetaMaskNetworkDriver, type WalletPromptDriver } from '@broccolo1d/playwright';
+
+const expectedAccount = '0x0000000000000000000000000000000000000000';
+
+// Replace these fake drivers with explicit prompt/network automation in real wallet jobs.
+const prompt: WalletPromptDriver = {
+  async approveConnection() {}
+};
+
+const network: MetaMaskNetworkDriver = {
+  async getChainId() { return 11155111; },
+  async getAccounts() { return [expectedAccount]; },
+  async switchChain() {},
+  async addEthereumChain() {}
+};
+
+export default defineWalletQaConfig({
+  use: {
+    walletConfig: {
+      useRealWallet: false,
+      artifactDir: '.wallet-artifacts/playwright',
+      prompt,
+      network
+    }
+  }
+});
+```
+
 ## Fixtures
 
 - `walletConfig`: per-test wallet QA configuration.

@@ -42,15 +42,22 @@ test('connects app-owned wallet flow', async ({ page, wallet }) => {
 });
 ```
 
+Real `wallet.connect` runs must also configure explicit `walletConfig.prompt` and `walletConfig.network` drivers.
+
 ### Lower-level library
 
 ```ts
 const browser = await launchWalletBrowser({ profileName: 'sepolia-burner' });
-await assertExpectedChainAndAccount({
-  driver: browser.network,
-  expectedChainId: 11155111,
-  expectedAccount: process.env.SEPOLIA_WALLET_ADDRESS!
-});
+const expectedAccount = process.env.SEPOLIA_WALLET_ADDRESS!;
+const network: MetaMaskNetworkDriver = {
+  async getChainId() { return 11155111; },
+  async getAccounts() { return [expectedAccount]; },
+  async switchChain() {},
+  async addEthereumChain() {}
+};
+const config = resolveSepoliaNetworkConfig({ expectedAccount });
+await assertExpectedChainAndAccount(config, network);
+await browser.context.close();
 ```
 
 ### Artifact contract
