@@ -1,6 +1,6 @@
 # Product roadmap: Web3 QA automation
 
-Agent Browser Wallet is focused on becoming a QA automation harness for dapps that need testing through a real browser wallet.
+brocolli-test is focused on becoming an importable QA automation package for dapps that need testing through a real browser wallet.
 
 ## Product thesis
 

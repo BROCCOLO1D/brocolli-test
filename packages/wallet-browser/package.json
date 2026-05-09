@@ -1,5 +1,5 @@
 {
-  "name": "@agent-browser-wallet/wallet-browser",
+  "name": "@brocolli-test/wallet-browser",
   "version": "0.0.0",
   "private": true,
   "type": "module",

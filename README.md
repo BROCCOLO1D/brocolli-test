@@ -1,8 +1,8 @@
-# Agent Browser Wallet
+# brocolli-test
 
 Web3 QA automation for real browser-wallet flows.
 
-Agent Browser Wallet is a Playwright/Chromium harness for testing dapps through a real wallet extension instead of a mocked provider. It launches Chromium with MetaMask, prepares an isolated burner wallet profile, drives dapp UI, handles wallet prompts through fail-closed guardrails, and writes redacted proof artifacts that can be verified after a run.
+brocolli-test is an importable Playwright wallet QA foundation for testing dapps through a real wallet extension instead of a mocked provider. It layers reusable Playwright fixtures over the lower-level wallet-browser helpers, keeps wallet side effects opt-in, drives dapp UI, handles wallet prompts through fail-closed guardrails, and writes redacted proof artifacts that can be verified after a run.
 
 The project focus is now narrow and product-oriented:
 
@@ -64,6 +64,7 @@ Local dogfood already proved:
 
 ```text
 apps/fixture-dapp/                 # Minimal dapp used for deterministic QA flows
+packages/playwright/                # Importable @brocolli-test/playwright fixtures for app QA suites
 packages/wallet-browser/           # Core config, network, prompt, guardrail, proof helpers
 scripts/live-fixture-connect.mjs   # Local real-wallet fixture connection runner
 scripts/live-wildcat-connect.mjs   # Local real-wallet Wildcat connection runner
@@ -107,8 +108,8 @@ pnpm wallet:metamask:fetch
 Run non-secret smoke/config commands:
 
 ```bash
-pnpm --filter @agent-browser-wallet/wallet-browser cli --help
-pnpm --filter @agent-browser-wallet/wallet-browser cli prepare
+pnpm --filter @brocolli-test/wallet-browser cli --help
+pnpm --filter @brocolli-test/wallet-browser cli prepare
 pnpm wallet:smoke:metamask
 pnpm wallet:smoke:fixture-extension
 ```
@@ -117,6 +118,43 @@ On Linux/WSL/CI without a display, wrap real browser commands with Xvfb:
 
 ```bash
 xvfb-run -a pnpm wallet:smoke:metamask
+```
+
+## Importable Playwright package
+
+App QA suites can import the fixture foundation instead of shelling out to repo scripts:
+
+```ts
+// tests/wallet.spec.ts
+import { expect, test } from '@brocolli-test/playwright';
+
+test('connects with an explicit wallet policy', async ({ page, wallet, walletArtifacts }) => {
+  await page.goto('http://127.0.0.1:5173');
+  await wallet.connect({
+    requestConnection: async () => page.getByRole('button', { name: /connect/i }).click(),
+    expectedAccount: '0x0000000000000000000000000000000000000000',
+    expectedChainId: 11155111,
+    origin: 'http://127.0.0.1:5173'
+  });
+  await walletArtifacts.screenshot('connected');
+  expect(wallet.maskAddress('0x0000000000000000000000000000000000000000')).toContain('…');
+});
+```
+
+Real MetaMask launch is opt-in via `walletConfig.useRealWallet`; without explicit prompt/network drivers, wallet actions fail closed rather than pretending approval succeeded.
+
+```ts
+// playwright.config.ts
+import { defineWalletQaConfig } from '@brocolli-test/playwright';
+
+export default defineWalletQaConfig({
+  use: {
+    walletConfig: {
+      useRealWallet: false,
+      artifactDir: '.wallet-artifacts/playwright'
+    }
+  }
+});
 ```
 
 ## Local live QA runs

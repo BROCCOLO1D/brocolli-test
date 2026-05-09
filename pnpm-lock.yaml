@@ -30,6 +30,22 @@ importers:
         specifier: 25.6.0
         version: 25.6.0
 
+  packages/playwright:
+    dependencies:
+      '@brocolli-test/wallet-browser':
+        specifier: workspace:*
+        version: link:../wallet-browser
+    devDependencies:
+      '@playwright/test':
+        specifier: 1.59.1
+        version: 1.59.1
+      '@types/node':
+        specifier: 25.6.0
+        version: 25.6.0
+      vitest:
+        specifier: 4.1.5
+        version: 4.1.5(@types/node@25.6.0)(vite@8.0.10(@types/node@25.6.0))
+
   packages/wallet-browser:
     dependencies:
       playwright:

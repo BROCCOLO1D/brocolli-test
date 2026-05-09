@@ -1,5 +1,5 @@
 {
-  "name": "@agent-browser-wallet/fixture-dapp",
+  "name": "@brocolli-test/fixture-dapp",
   "version": "0.0.0",
   "private": true,
   "type": "module",
