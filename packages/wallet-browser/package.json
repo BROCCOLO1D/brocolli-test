@@ -1,8 +1,31 @@
 {
   "name": "@broccolo1d/wallet-browser",
   "version": "0.1.1",
+  "description": "Core browser-wallet runtime, guardrails, CLI, and artifact helpers for dapp QA.",
   "private": false,
   "type": "module",
+  "license": "MIT",
+  "homepage": "https://github.com/BROCCOLO1D/brocolli-test#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/BROCCOLO1D/brocolli-test.git",
+    "directory": "packages/wallet-browser"
+  },
+  "bugs": {
+    "url": "https://github.com/BROCCOLO1D/brocolli-test/issues"
+  },
+  "keywords": [
+    "playwright",
+    "metamask",
+    "wallet",
+    "dapp",
+    "qa",
+    "ethereum",
+    "browser-automation"
+  ],
+  "engines": {
+    "node": ">=22.0.0 <23.0.0"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
@@ -17,6 +40,8 @@
   },
   "files": [
     "dist/",
+    "README.md",
+    "LICENSE",
     "package.json"
   ],
   "scripts": {

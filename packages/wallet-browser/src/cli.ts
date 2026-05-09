@@ -1,4 +1,7 @@
 #!/usr/bin/env node
+import { readdirSync, statSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+
 import { prepareChromiumLaunchOptions } from './launcher.js';
 import { resolveWalletBrowserConfig, type WalletBrowserEnv } from './config.js';
 import { createMetaMaskOnboardingPlan, resolveMetaMaskOnboardingConfig } from './onboarding.js';
@@ -57,7 +60,7 @@ const USAGE = `Usage:
   wallet-browser prepare
   wallet-browser smoke-metamask
   wallet-browser smoke-fixture-extension
-  wallet-browser verify-smoke-artifacts <artifact-dir>
+  wallet-browser verify-smoke-artifacts [artifact-dir]
   wallet-browser verify-fixture-proof <artifact-dir>
   wallet-browser onboarding-plan
   wallet-browser profile-bootstrap-import --dry-run
@@ -68,6 +71,8 @@ launch real Chromium with MetaMask loaded and capture local-only smoke screensho
 launch real Chromium with a generated fake extension to prove extension-loading mechanics only,
 print a redacted MetaMask onboarding plan for the configured burner wallet, or print a
 redacted Sepolia network provisioning plan.
+When verify-smoke-artifacts is called without an artifact directory, it verifies the newest
+directory under .wallet-artifacts/metamask-smoke or .wallet-artifacts/fixture-extension-smoke.
 The prepare command does not launch Chromium. The smoke-metamask command launches Chromium but
 never imports, unlocks, connects, signs, or transacts. Plan commands validate injected environment/config
 and never print raw private keys, wallet passwords, or RPC tokens.
@@ -138,14 +143,11 @@ export async function runWalletBrowserCli(options: WalletBrowserCliOptions = {})
   }
 
   if (command === 'verify-smoke-artifacts') {
-    const artifactDir = argv[1];
-    if (!artifactDir) {
-      stderr(`Missing artifact directory for verify-smoke-artifacts.\n\n${USAGE}`);
-      return 1;
-    }
     try {
+      const artifactDir = argv[1] ?? resolveLatestSmokeArtifactDir(options.cwd ?? process.cwd());
       const result = verifySmokeArtifactManifest(artifactDir);
-      stdout(`${JSON.stringify(result, null, 2)}\n`);
+      const publicResult = { ...result, artifactDir: '[redacted:artifact-dir]', manifestPath: '[redacted:manifest-path]', inspectionGuidePath: '[redacted:inspection-guide-path]' };
+      stdout(`${JSON.stringify(publicResult, null, 2)}\n`);
       return 0;
     } catch (error) {
       stderr(`${error instanceof Error ? error.message : String(error)}\n`);
@@ -238,6 +240,39 @@ export async function runWalletBrowserCli(options: WalletBrowserCliOptions = {})
     stderr(`${redactPrepareError(message, options.env ?? process.env)}\n`);
     return 1;
   }
+}
+
+function resolveLatestSmokeArtifactDir(cwd: string): string {
+  const roots = [join(cwd, '.wallet-artifacts', 'metamask-smoke'), join(cwd, '.wallet-artifacts', 'fixture-extension-smoke')];
+  const candidates: Array<{ path: string; mtimeMs: number }> = [];
+
+  for (const root of roots) {
+    let entries: string[];
+    try {
+      entries = readdirSync(root);
+    } catch {
+      continue;
+    }
+
+    for (const entry of entries) {
+      const candidate = resolve(root, entry);
+      try {
+        const stats = statSync(candidate);
+        if (stats.isDirectory()) {
+          candidates.push({ path: candidate, mtimeMs: stats.mtimeMs });
+        }
+      } catch {
+        continue;
+      }
+    }
+  }
+
+  candidates.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  const latest = candidates[0];
+  if (!latest) {
+    throw new Error('No smoke artifact directories found. Pass an artifact directory or run smoke-metamask/smoke-fixture-extension first.');
+  }
+  return latest.path;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

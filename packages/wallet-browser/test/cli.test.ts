@@ -144,7 +144,59 @@ describe('runWalletBrowserCli', () => {
     expect(result.screenshots).toHaveLength(1);
     expect(result.screenshots[0].file).toBe('browser-page.png');
     expect(result.notes.join(' ')).toContain('No wallet was imported');
+    expect(result).toMatchObject({
+      artifactDir: '[redacted:artifact-dir]',
+      manifestPath: '[redacted:manifest-path]',
+      inspectionGuidePath: '[redacted:inspection-guide-path]'
+    });
+    expect(output).not.toContain(artifactDir);
     expect(output).not.toContain('do-not-print-this-password');
+  });
+
+  it('verifies the latest smoke artifact directory when no path is provided', async () => {
+    const cwd = await tempRoot();
+    const artifactDir = join(cwd, '.wallet-artifacts', 'metamask-smoke', 'latest-run');
+    mkdirSync(artifactDir, { recursive: true });
+    writeFileSync(join(artifactDir, 'browser-page.png'), 'browser image bytes');
+    writeFileSync(join(artifactDir, 'INSPECTION.md'), '# inspection\n');
+    writeFileSync(
+      join(artifactDir, 'SMOKE-MANIFEST.json'),
+      `${JSON.stringify(
+        {
+          artifactType: 'wallet-browser-smoke-screenshots',
+          inspectionGuide: 'INSPECTION.md',
+          screenshots: [
+            {
+              label: 'browser-page',
+              file: 'browser-page.png',
+              sizeBytes: 'browser image bytes'.length,
+              sha256: createHash('sha256').update('browser image bytes').digest('hex')
+            }
+          ],
+          notes: ['No wallet was imported, unlocked, connected, used to sign, or used to transact.']
+        },
+        null,
+        2
+      )}\n`
+    );
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    const exitCode = await runWalletBrowserCli({
+      argv: ['verify-smoke-artifacts'],
+      cwd,
+      stdout: (message) => stdout.push(message),
+      stderr: (message) => stderr.push(message)
+    });
+
+    expect(exitCode).toBe(0);
+    expect(stderr).toEqual([]);
+    const output = stdout.join('');
+    const result = JSON.parse(output) as { status: string; artifactDir: string; screenshots: Array<{ file: string }> };
+    expect(result.status).toBe('verified');
+    expect(result.artifactDir).toBe('[redacted:artifact-dir]');
+    expect(result.screenshots[0].file).toBe('browser-page.png');
+    expect(output).not.toContain(artifactDir);
   });
 
   it('prints a sanitized launch plan without launching Chromium or exposing wallet secrets', async () => {
