@@ -1,6 +1,6 @@
 {
   "name": "@broccolo1d/playwright",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": false,
   "type": "module",
   "main": "./dist/index.js",
@@ -25,7 +25,7 @@
     "@playwright/test": "^1.59.1"
   },
   "dependencies": {
-    "@broccolo1d/wallet-browser": "workspace:*"
+    "@broccolo1d/wallet-browser": "workspace:^"
   },
   "devDependencies": {
     "@playwright/test": "1.59.1",
