@@ -1,137 +1,57 @@
 # brocolli-test
 
-Wallet QA packages for Playwright suites that need to exercise dapps through a real browser-wallet path.
+Infrastructure-grade Web3 QA packages for Playwright suites that need to exercise dapps through a real browser-wallet path.
 
-This repository is a pnpm workspace with two public packages:
+`brocolli-test` is code-first test infrastructure, not a collection of target scripts. Downstream apps keep ownership of routes, selectors, test data, and assertions. These packages provide the reusable wallet runtime, Playwright fixtures, policy guardrails, CLI verification, and public-safe artifact contracts.
 
-- `@broccolo1d/wallet-browser`: lower-level browser, MetaMask, network, prompt, guardrail, and artifact helpers.
-- `@broccolo1d/playwright`: Playwright fixtures that downstream dapp test suites import.
+![Safe usage screenshot: install, import, CLI, and verified Playwright output](docs/assets/readme/wallet-qa-package-output.png)
 
-The default posture is conservative. Real-wallet launch is opt-in. Prompt approval requires explicit drivers and policy. Local profiles, screenshots, traces, manifests, extension bundles, and environment files are treated as sensitive runtime state.
+## Packages
 
-## Status
+| Package | Version | Purpose |
+| --- | ---: | --- |
+| [`@broccolo1d/wallet-browser`](packages/wallet-browser/README.md) | `0.2.1` | Lower-level Chromium/MetaMask launch helpers, prompt guardrails, network/account assertions, smoke CLI, and artifact verification. |
+| [`@broccolo1d/playwright`](packages/playwright/README.md) | `0.2.1` | Playwright fixtures for app-owned wallet QA specs, proof manifests, screenshots, and fail-closed wallet policy wiring. |
 
-Implemented today:
+The default posture is conservative:
 
-- importable TypeScript packages with ESM output;
-- persistent Chromium launch with an unpacked MetaMask extension;
-- redacted launch, onboarding, network, and smoke-artifact CLI commands;
-- connect-oriented wallet control helpers with chain/account/origin guardrails;
-- Playwright fixtures for app-owned dapp QA specs;
-- fail-closed prompt guard helpers for explicit origin/account/chain policy;
-- local-only smoke screenshot manifests and wallet QA proof manifests with basename/hash/size verification;
-- tracked-file and git-history sensitive-content scan.
+- real wallet launch is opt-in;
+- burner/testnet wallets only;
+- prompts fail closed unless explicit drivers and policy are configured;
+- signatures and transactions are not approved implicitly;
+- local profiles, screenshots, traces, manifests, extension bundles, and env files are sensitive runtime state;
+- public output must not contain private keys, seed phrases, RPC credentials, local paths, or full wallet addresses.
 
-Not claimed:
+## What is implemented
 
-- production-wallet automation;
-- mainnet automation;
-- generic wallet coverage beyond the current MetaMask-oriented implementation;
-- blanket approval of signatures or transactions without explicit policy and prompt drivers.
+- ESM TypeScript packages published as `@broccolo1d/wallet-browser@0.2.1` and `@broccolo1d/playwright@0.2.1`.
+- Persistent Chromium launch with an unpacked MetaMask extension.
+- Redacted CLI commands for launch planning, onboarding planning, network planning, smoke capture, and artifact verification.
+- Connect-oriented wallet control helpers with account, chain, origin, and prompt guardrails.
+- Playwright fixtures for downstream dapp QA specs.
+- Public-oriented proof manifests with attachment basename, sha256, size, masked account, safe origin, and redacted failure text.
+- Verification helpers that reject full addresses, absolute local paths, and mismatched artifact hashes.
+- Repository sensitive-content scan for tracked files and git history.
 
-## Repository layout
+Not claimed: production-wallet automation, mainnet automation, broad wallet comparison, blind signing, or unrestricted transaction approval.
 
-```text
-packages/wallet-browser/           # Core wallet runtime, policy, CLI, and artifact helpers
-packages/playwright/                # Playwright fixtures for downstream dapp QA suites
-scripts/fetch-metamask-extension.py # Local MetaMask extension fetch utility
-scripts/sensitive-scan.py           # Repository sensitive-content scan
-docs/architecture.md                # Package boundaries and runtime model
-docs/security-and-artifacts.md      # Secret, profile, trace, screenshot, and manifest policy
-docs/product-roadmap.md             # Product milestones and non-goals
-```
+## Install in a dapp test repo
 
-Ignored local runtime paths:
-
-```text
-.env
-.wallet-extensions/
-.wallet-profiles/
-.wallet-artifacts/
-playwright-report/
-test-results/
-traces/
-```
-
-## Quickstart
-
-Requirements:
-
-- Node.js `>=22 <23`
-- pnpm `11.0.8`
-- Chromium dependencies required by Playwright on the host running browser flows
-
-Install and verify the committed code:
+Most consumer repos should start with the Playwright package:
 
 ```bash
-pnpm install --frozen-lockfile
-pnpm test
-pnpm typecheck
-pnpm build
-pnpm security:scan
+pnpm add -D @broccolo1d/playwright @playwright/test
 ```
 
-Print the wallet-browser CLI help from the workspace root:
+Use the lower-level browser package directly when building custom runners or non-fixture integrations:
 
 ```bash
-pnpm wallet:cli --help
+pnpm add -D @broccolo1d/wallet-browser playwright
 ```
 
-Fetch the pinned MetaMask extension into ignored local storage:
+Both packages are ESM-only and require Node.js `>=22 <23`.
 
-```bash
-pnpm wallet:metamask:fetch --dry-run
-pnpm wallet:metamask:fetch
-```
-
-Prepare and inspect a redacted Chromium/MetaMask launch plan. This resolves paths from the repository root and does not launch Chromium:
-
-```bash
-pnpm wallet:prepare
-```
-
-Run local smoke commands only with burner/testnet configuration. On Linux, WSL, or CI without a display, wrap real browser commands with Xvfb:
-
-```bash
-xvfb-run -a pnpm wallet:smoke:metamask
-pnpm wallet:smoke:verify
-```
-
-`pnpm wallet:smoke:verify` verifies the latest smoke artifact directory by default. Pass an explicit directory to verify a specific run:
-
-```bash
-pnpm wallet:smoke:verify .wallet-artifacts/metamask-smoke/<run-id>
-```
-
-## Using `@broccolo1d/playwright`
-
-Downstream dapp suites own routes, selectors, assertions, and test data. They import the shared fixtures and supply explicit wallet policy.
-
-```ts
-// tests/wallet.spec.ts
-import { expect, test } from '@broccolo1d/playwright';
-
-test('connects with explicit wallet policy', async ({ page, wallet, walletArtifacts }) => {
-  await page.goto('http://127.0.0.1:5173');
-
-  await wallet.connect({
-    requestConnection: async () => page.getByRole('button', { name: /connect/i }).click(),
-    expectedAccount: '0x0000000000000000000000000000000000000000',
-    expectedChainId: 11155111,
-    origin: 'http://127.0.0.1:5173'
-  });
-
-  const screenshot = await walletArtifacts.screenshot('connected');
-  await walletArtifacts.writeProofManifest({
-    status: 'connected',
-    origin: 'http://127.0.0.1:5173',
-    account: '0x0000000000000000000000000000000000000000',
-    chainId: 11155111,
-    attachments: [{ label: 'wallet-connected', path: screenshot, contentType: 'image/png' }]
-  });
-  await expect(page.getByText(/connected/i)).toBeVisible();
-});
-```
+## Playwright usage
 
 ```ts
 // playwright.config.ts
@@ -142,18 +62,23 @@ import {
   type WalletPromptDriver
 } from '@broccolo1d/playwright';
 
-const expectedAccount = '0x0000000000000000000000000000000000000000';
+const expectedAccount = process.env.SEPOLIA_WALLET_ADDRESS;
+if (!expectedAccount) throw new Error('SEPOLIA_WALLET_ADDRESS is required for wallet QA');
+
 const origin = 'http://127.0.0.1:5173';
 
-// Replace this fake delegate with explicit prompt automation in real wallet jobs.
-const promptDelegate: WalletPromptDriver = {
-  async approveConnection() {}
+// Supply real, reviewed prompt automation in jobs that approve wallet UI.
+const promptAutomation: WalletPromptDriver = {
+  async approveConnection() {
+    throw new Error('configure app-specific prompt automation before enabling real wallet approval');
+  }
 };
+
 const prompt = createFailClosedWalletPromptDriver({
   origin,
   expectedAccount,
   expectedChainIdHex: '0xaa36a7',
-  delegate: promptDelegate
+  delegate: promptAutomation
 });
 
 const network: MetaMaskNetworkDriver = {
@@ -168,6 +93,9 @@ export default defineWalletQaConfig({
     walletConfig: {
       useRealWallet: false,
       artifactDir: '.wallet-artifacts/playwright',
+      expectedAccount,
+      expectedChainId: 11155111,
+      origin,
       prompt,
       network
     }
@@ -175,11 +103,36 @@ export default defineWalletQaConfig({
 });
 ```
 
-`useRealWallet` defaults to `false`. When enabled, `wallet.connect` still fails closed unless a prompt driver and network driver are configured. Prompt approval also requires an explicit expected origin. `writeProofManifest` stores public proof metadata with attachment basenames, sha256 hashes, sizes, masked accounts, and redacted failures; use `verifyWalletQaProofManifest` before promoting any artifact manifest because it rejects full addresses and local path leaks.
+```ts
+// tests/wallet.spec.ts
+import { expect, test, verifyWalletQaProofManifest } from '@broccolo1d/playwright';
 
-## Using `@broccolo1d/wallet-browser`
+test('connects with explicit wallet policy', async ({ page, wallet, walletArtifacts }) => {
+  await page.goto('http://127.0.0.1:5173');
 
-The lower-level package exposes runtime helpers for packages or apps that do not want the Playwright fixture layer.
+  const result = await wallet.connect({
+    requestConnection: async () => page.getByRole('button', { name: /connect/i }).click()
+  });
+
+  await wallet.assertState();
+  const screenshot = await walletArtifacts.screenshot('connected');
+
+  await walletArtifacts.writeProofManifest({
+    status: 'connected',
+    origin: 'http://127.0.0.1:5173',
+    account: result.activeAccount,
+    chainId: result.chainId,
+    attachments: [{ label: 'dapp-connected', path: screenshot, contentType: 'image/png' }]
+  });
+
+  await verifyWalletQaProofManifest(walletArtifacts.artifactDir);
+  await expect(page.getByText(/connected/i)).toBeVisible();
+});
+```
+
+`useRealWallet` defaults to `false`. When enabled, `wallet.connect` still requires expected account, expected chain, a dapp trigger, `walletConfig.prompt`, and `walletConfig.network`.
+
+## Lower-level wallet-browser usage
 
 ```ts
 import {
@@ -190,11 +143,12 @@ import {
   resolveWalletBrowserConfig
 } from '@broccolo1d/wallet-browser';
 
-const expectedAccount = '0x0000000000000000000000000000000000000000';
+const expectedAccount = process.env.SEPOLIA_WALLET_ADDRESS;
+if (!expectedAccount) throw new Error('SEPOLIA_WALLET_ADDRESS is required for wallet QA');
+
 const config = resolveWalletBrowserConfig();
 const { context } = await launchWalletBrowser({ config });
 
-// Replace with an app-provided network driver in real wallet jobs.
 const network: MetaMaskNetworkDriver = {
   async getChainId() { return 11155111; },
   async getAccounts() { return [expectedAccount]; },
@@ -202,27 +156,83 @@ const network: MetaMaskNetworkDriver = {
   async addEthereumChain() {}
 };
 
-const sepolia = resolveSepoliaNetworkConfig({ expectedAccount });
-
 try {
-  await assertExpectedChainAndAccount(sepolia, network);
+  await assertExpectedChainAndAccount(resolveSepoliaNetworkConfig({ expectedAccount }), network);
 } finally {
   await context.close();
 }
 ```
 
-Prefer package APIs over shelling out from tests. Use the CLI for local setup, smoke capture, and artifact verification.
+Prefer package APIs from tests. Use the CLI for local setup, smoke capture, and verification.
 
-## Local burner configuration
+## Repository development
 
-Create ignored local config only for burner/testnet flows:
+Requirements:
+
+- Node.js `>=22 <23`
+- pnpm `11.0.8`
+- Chromium host dependencies required by Playwright for real browser flows
 
 ```bash
-cp .env.example .env
-chmod 600 .env
+pnpm install --frozen-lockfile
+pnpm test
+pnpm typecheck
+pnpm build
+pnpm security:scan
 ```
 
-Fill `.env` with non-production testnet values. Do not use production wallets or mainnet accounts. Do not commit `.env`, profiles, traces, screenshots, videos, reports, extension bundles, or proof artifacts.
+Repository layout:
+
+```text
+packages/wallet-browser/           # Core wallet runtime, policy, CLI, and artifact helpers
+packages/playwright/                # Playwright fixtures for downstream dapp QA suites
+scripts/fetch-metamask-extension.py # Local MetaMask extension fetch utility
+scripts/sensitive-scan.py           # Repository sensitive-content scan
+docs/architecture.md                # Package boundaries and runtime model
+docs/security-and-artifacts.md      # Secret, profile, trace, screenshot, and manifest policy
+docs/product-roadmap.md             # Implemented state, roadmap, and non-goals
+docs/assets/readme/                 # Public-safe README assets
+```
+
+Ignored runtime paths:
+
+```text
+.env
+.wallet-extensions/
+.wallet-profiles/
+.wallet-artifacts/
+playwright-report/
+test-results/
+traces/
+```
+
+## CLI examples
+
+```bash
+pnpm wallet:cli --help
+pnpm wallet:metamask:fetch --dry-run
+pnpm wallet:metamask:fetch
+pnpm wallet:prepare
+```
+
+`wallet:prepare` prints a launch plan and does not launch Chromium. The raw local output can include machine-specific paths; keep it local or redact before sharing.
+
+Real browser smoke commands are local-only and should use burner/testnet configuration. On Linux, WSL, or CI without a display, run with Xvfb:
+
+```bash
+xvfb-run -a pnpm wallet:smoke:metamask
+pnpm wallet:smoke:verify
+pnpm wallet:smoke:verify .wallet-artifacts/metamask-smoke/<run-id>
+```
+
+## Packaging checks
+
+```bash
+pnpm --filter @broccolo1d/wallet-browser pack --dry-run
+pnpm --filter @broccolo1d/playwright pack --dry-run
+```
+
+Tarballs include package README files, the root license, package metadata, and built `dist/` output.
 
 ## Safety model
 
@@ -236,17 +246,6 @@ Fill `.env` with non-production testnet values. Do not use production wallets or
 - Artifacts remain local unless reviewed, scrubbed, and verified.
 
 See [docs/security-and-artifacts.md](docs/security-and-artifacts.md) for the full handling policy.
-
-## Packaging
-
-The packages are public-package ready and keep package names unchanged:
-
-```bash
-pnpm --filter @broccolo1d/wallet-browser pack --dry-run
-pnpm --filter @broccolo1d/playwright pack --dry-run
-```
-
-Tarballs include package README files, the root license, package metadata, and built `dist/` output.
 
 ## Docs
 
