@@ -7,7 +7,7 @@ This package is for consumer app repos. The app owns routes, selectors, wallet m
 ## Install
 
 ```bash
-pnpm add -D @broccolo1d/playwright@0.2.3 @playwright/test
+pnpm add -D @broccolo1d/playwright@0.2.4 @playwright/test
 ```
 
 ESM-only. Node.js `>=22 <23`.

@@ -62,7 +62,7 @@ interface FixtureConnectionProofManifest {
   notes: string[];
 }
 
-const WALLET_BROWSER_PACKAGE_VERSION = '0.2.3';
+const WALLET_BROWSER_PACKAGE_VERSION = '0.2.4';
 
 function runtimeMetadata(): FixtureConnectionProofManifest['provenance']['runtime'] {
   return { node: process.version, platform: process.platform, arch: process.arch };

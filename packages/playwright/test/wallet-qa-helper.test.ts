@@ -336,7 +336,7 @@ describe('wallet QA proof manifests', () => {
     await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
     await expect(verifyWalletQaProofManifest(artifactDir)).rejects.toThrow(/package version provenance/i);
 
-    manifest.provenance.packageVersion = '0.2.3';
+    manifest.provenance.packageVersion = '0.2.4';
     manifest.provenance.runtime = { node: 'v0.0.0', platform: process.platform, arch: process.arch };
     await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
     await expect(verifyWalletQaProofManifest(artifactDir)).rejects.toThrow(/runtime provenance/i);
@@ -367,7 +367,7 @@ describe('wallet QA proof manifests', () => {
       artifactType: 'wallet-qa-proof',
       createdAt: '2026-01-01T00:00:00.000Z',
       runId: 'empty-connected-proof',
-      provenance: { packageName: '@broccolo1d/playwright', packageVersion: '0.2.3', framework: 'playwright', tool: 'test', runtime: { node: process.version, platform: process.platform, arch: process.arch } },
+      provenance: { packageName: '@broccolo1d/playwright', packageVersion: '0.2.4', framework: 'playwright', tool: 'test', runtime: { node: process.version, platform: process.platform, arch: process.arch } },
       status: 'connected',
       artifacts: [],
       summary: { status: 'connected', artifactCount: 0 },
