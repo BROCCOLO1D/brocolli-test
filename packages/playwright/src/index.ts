@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, stat, writeFile, copyFile } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 
 import { defineConfig, expect, test as base, type BrowserContext, type Page, type PlaywrightTestConfig, type TestInfo } from '@playwright/test';
@@ -60,6 +60,9 @@ export interface WalletQaConfig {
 }
 
 export interface WalletConnectOptions {
+  /** Preferred developer-first dapp action: click the app's connect button/modal trigger. */
+  click?: () => Promise<void>;
+  /** Backwards-compatible alias for click. */
   requestConnection?: () => Promise<void>;
   expectedAccount?: string;
   expectedChainId?: string | number;
@@ -84,6 +87,8 @@ export interface WalletAssertStateOptions {
 export interface WalletQa {
   connect(options?: WalletConnectOptions): Promise<ConnectWalletResult>;
   assertState(options?: WalletAssertStateOptions): Promise<SepoliaNetworkAssertionResult>;
+  expectConnected(options?: WalletAssertStateOptions): Promise<SepoliaNetworkAssertionResult>;
+  expectChain(options?: Pick<WalletAssertStateOptions, 'expectedChainId' | 'expectedAccount'>): Promise<SepoliaNetworkAssertionResult>;
   maskAddress(address: string): string;
 }
 
@@ -92,6 +97,7 @@ export interface WalletArtifacts {
   screenshot(name: string, options?: Parameters<Page['screenshot']>[0]): Promise<string>;
   writeManifest(name: string, data: Record<string, unknown>): Promise<string>;
   writeProofManifest(options: Omit<WalletQaProofManifestOptions, 'artifactDir'>): Promise<string>;
+  connectedProof(name: string, options: Omit<WalletQaProofManifestOptions, 'artifactDir' | 'manifestName' | 'status' | 'failure'>): Promise<string>;
   writeFailureManifest(name: string, error: unknown, data?: Record<string, unknown>): Promise<string>;
 }
 
@@ -199,7 +205,18 @@ export const test = base.extend<WalletQaFixtures, WalletQaWorkerFixtures>({
   }
 });
 
-function createWalletQa(page: Page, config: WalletQaConfig): WalletQa {
+export function createWalletQa(page: Page, config: WalletQaConfig): WalletQa {
+  async function assertStateForHelper(helperName: string, options: WalletAssertStateOptions = {}): Promise<SepoliaNetworkAssertionResult> {
+    const expectedAccount = options.expectedAccount ?? config.expectedAccount;
+    const expectedChainId = options.expectedChainId ?? config.expectedChainId;
+    if (!expectedAccount || expectedChainId === undefined) {
+      throw new Error(`${helperName} requires expectedAccount and expectedChainId in options or walletConfig.`);
+    }
+
+    const network = requireConfigured(config.network, `${helperName} requires walletConfig.network to read wallet state; fail closed.`);
+    return assertWalletState({ network, expectedAccount, expectedChainId });
+  }
+
   return {
     async connect(options = {}) {
       const expectedAccount = options.expectedAccount ?? config.expectedAccount;
@@ -208,7 +225,12 @@ function createWalletQa(page: Page, config: WalletQaConfig): WalletQa {
         throw new Error('wallet.connect requires expectedAccount and expectedChainId in options or walletConfig.');
       }
 
-      const dapp = createDappDriver(page, config, options.requestConnection);
+      const origin = options.origin ?? config.origin;
+      if (!origin) {
+        throw new Error('wallet.connect requires origin in options or walletConfig.origin before approving a wallet prompt; fail closed.');
+      }
+
+      const dapp = createDappDriver(page, config, options.click ?? options.requestConnection);
       const prompt = requireConfigured(config.prompt, 'wallet.connect requires walletConfig.prompt to approve a real wallet prompt; fail closed.');
       const network = requireConfigured(config.network, 'wallet.connect requires walletConfig.network to verify chain/account; fail closed.');
       return connectWallet({
@@ -217,20 +239,24 @@ function createWalletQa(page: Page, config: WalletQaConfig): WalletQa {
         network,
         expectedAccount,
         expectedChainId,
-        origin: options.origin ?? config.origin,
+        origin,
         guardrails: options.guardrails ?? config.guardrails
       });
     },
 
     async assertState(options = {}) {
-      const expectedAccount = options.expectedAccount ?? config.expectedAccount;
-      const expectedChainId = options.expectedChainId ?? config.expectedChainId;
-      if (!expectedAccount || expectedChainId === undefined) {
-        throw new Error('wallet.assertState requires expectedAccount and expectedChainId in options or walletConfig.');
-      }
+      return assertStateForHelper('wallet.assertState', options);
+    },
 
-      const network = requireConfigured(config.network, 'wallet.assertState requires walletConfig.network to read wallet state; fail closed.');
-      return assertWalletState({ network, expectedAccount, expectedChainId });
+    async expectConnected(options = {}) {
+      return assertStateForHelper('wallet.expectConnected', options);
+    },
+
+    async expectChain(options = {}) {
+      if (options.expectedChainId === undefined && config.expectedChainId === undefined) {
+        throw new Error('wallet.expectChain requires expectedChainId in options or walletConfig.');
+      }
+      return assertStateForHelper('wallet.expectChain', options);
     },
 
     maskAddress(address: string) {
@@ -254,10 +280,10 @@ function createDappDriver(page: Page, config: WalletQaConfig, requestConnection?
     };
   }
 
-  return requireConfigured(configured, 'wallet.connect requires requestConnection, walletConfig.dapp, or walletConfig.dappSelectors; fail closed.');
+  return requireConfigured(configured, 'wallet.connect requires click, requestConnection, walletConfig.dapp, or walletConfig.dappSelectors to trigger the dapp connection action; fail closed.');
 }
 
-function createWalletArtifacts(page: Page, config: WalletQaConfig, testInfo: TestInfo): WalletArtifacts {
+export function createWalletArtifacts(page: Page, config: WalletQaConfig, testInfo: TestInfo): WalletArtifacts {
   const artifactDir = resolve(config.artifactDir ?? DEFAULT_WALLET_CONFIG.artifactDir!);
   const runDir = join(artifactDir, sanitizePathPart(testInfo.project.name || 'default'), sanitizePathPart(testInfo.title));
   return {
@@ -276,6 +302,27 @@ function createWalletArtifacts(page: Page, config: WalletQaConfig, testInfo: Tes
     },
     async writeProofManifest(options) {
       return writeWalletQaProofManifest({ ...options, artifactDir: runDir });
+    },
+    async connectedProof(name, options) {
+      const manifestName = `${sanitizePathPart(name)}.json`;
+      const attachments = await Promise.all((options.attachments ?? []).map(async (attachment) => {
+        const file = attachment.publicFile ?? basename(attachment.path);
+        assertSafeArtifactBasename(file, 'attachment file');
+        const target = join(runDir, file);
+        await mkdir(dirname(target), { recursive: true });
+        if (resolve(attachment.path) !== resolve(target)) {
+          await copyFile(attachment.path, target);
+        }
+        return { ...attachment, publicFile: file };
+      }));
+      return writeWalletQaProofManifest({
+        ...options,
+        attachments,
+        status: 'connected',
+        manifestName,
+        artifactDir: runDir,
+        notes: [...(options.notes ?? []), `proof manifest: ${manifestName}`]
+      });
     },
     async writeFailureManifest(name, error, data = {}) {
       return this.writeManifest(name, { ...data, failure: formatWalletQaFailure(error) });

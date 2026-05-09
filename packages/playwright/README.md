@@ -7,7 +7,7 @@ This package is for consumer app repos. The app owns routes, selectors, wallet m
 ## Install
 
 ```bash
-pnpm add -D @broccolo1d/playwright@0.2.1 @playwright/test
+pnpm add -D @broccolo1d/playwright@0.2.2 @playwright/test
 ```
 
 ESM-only. Node.js `>=22 <23`.
@@ -76,14 +76,14 @@ test('connects through wallet policy', async ({ page, wallet, walletArtifacts })
   await page.goto('http://127.0.0.1:5173');
 
   const result = await wallet.connect({
-    requestConnection: async () => page.getByRole('button', { name: /connect/i }).click()
+    click: async () => page.getByRole('button', { name: /connect/i }).click()
   });
 
-  await wallet.assertState();
+  await wallet.expectConnected();
+  await wallet.expectChain({ expectedChainId: 11155111 });
 
   const screenshot = await walletArtifacts.screenshot('connected');
-  await walletArtifacts.writeProofManifest({
-    status: 'connected',
+  await walletArtifacts.connectedProof('wallet-connected', {
     origin: 'http://127.0.0.1:5173',
     account: result.activeAccount,
     chainId: result.chainId,
@@ -91,7 +91,7 @@ test('connects through wallet policy', async ({ page, wallet, walletArtifacts })
     notes: ['connect-only wallet QA proof']
   });
 
-  await verifyWalletQaProofManifest(walletArtifacts.artifactDir);
+  await verifyWalletQaProofManifest(walletArtifacts.artifactDir, 'wallet-connected.json');
   await expect(page.getByText(/connected/i)).toBeVisible();
 });
 ```
@@ -103,8 +103,8 @@ The proof manifest stores public-oriented metadata: attachment basenames, sha256
 - `walletConfig`: per-test wallet QA configuration.
 - `walletContext`: browser context under test.
 - `walletPage`: page under test.
-- `wallet`: `connect`, `assertState`, and `maskAddress` helpers.
-- `walletArtifacts`: screenshot, JSON, proof-manifest, and failure-manifest writers.
+- `wallet`: `connect`, `expectConnected`, `expectChain`, `assertState`, and `maskAddress` helpers.
+- `walletArtifacts`: screenshot, JSON, connected-proof, proof-manifest, and failure-manifest writers.
 
 ## Helpers
 
@@ -131,7 +131,7 @@ try {
 
 ## Fail-closed behavior
 
-`wallet.connect` requires expected account and chain ID in options or config. It also requires one of `requestConnection`, `walletConfig.dapp`, or `walletConfig.dappSelectors` to trigger the dapp flow.
+`wallet.connect` requires expected account and chain ID in options or config. It also requires one of `click`, `requestConnection`, `walletConfig.dapp`, or `walletConfig.dappSelectors` to trigger the dapp flow. Prefer `click` for new dapp-owned tests; `requestConnection` remains supported for existing tests.
 
 No prompt approval is implicit. No signature or transaction approval is claimed by this fixture API. Add those only through reviewed app-owned prompt automation and lower-level policy helpers.
 
