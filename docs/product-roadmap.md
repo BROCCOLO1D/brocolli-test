@@ -4,8 +4,8 @@
 
 The product line is now public package oriented:
 
-- `@broccolo1d/wallet-browser@0.2.1` — core browser-wallet runtime, guardrails, CLI, and artifact helpers.
-- `@broccolo1d/playwright@0.2.1` — Playwright fixtures for downstream dapp QA suites.
+- `@broccolo1d/wallet-browser@0.2.2` — core browser-wallet runtime, guardrails, CLI, and artifact helpers.
+- `@broccolo1d/playwright@0.2.2` — Playwright fixtures for downstream dapp QA suites.
 
 Target-specific scripts are not the product. Downstream apps own selectors, routes, modal behavior, assertions, and test data. These packages own wallet runtime primitives, policy boundaries, and verification contracts.
 
@@ -35,8 +35,8 @@ The harness should make those answers repeatable for humans, CI, and agents with
 ### Importable packages
 
 ```bash
-pnpm add -D @broccolo1d/playwright@0.2.1 @playwright/test
-pnpm add -D @broccolo1d/wallet-browser@0.2.1 playwright
+pnpm add -D @broccolo1d/playwright@0.2.2 @playwright/test
+pnpm add -D @broccolo1d/wallet-browser@0.2.2 playwright
 ```
 
 ### Playwright fixture layer
@@ -48,19 +48,21 @@ test('connects app-owned wallet flow', async ({ page, wallet, walletArtifacts })
   await page.goto('/');
 
   const result = await wallet.connect({
-    requestConnection: async () => page.getByRole('button', { name: /connect/i }).click()
+    click: async () => page.getByRole('button', { name: /connect/i }).click()
   });
 
+  await wallet.expectConnected();
+  await wallet.expectChain({ expectedChainId: 11155111 });
+
   const screenshot = await walletArtifacts.screenshot('connected');
-  await walletArtifacts.writeProofManifest({
-    status: 'connected',
+  await walletArtifacts.connectedProof('wallet-connected', {
     origin: 'http://127.0.0.1:3000',
     account: result.activeAccount,
     chainId: result.chainId,
     attachments: [{ label: 'dapp-connected', path: screenshot, contentType: 'image/png' }]
   });
 
-  await verifyWalletQaProofManifest(walletArtifacts.artifactDir);
+  await verifyWalletQaProofManifest(walletArtifacts.artifactDir, 'wallet-connected.json');
   await expect(page.getByText(/connected/i)).toBeVisible();
 });
 ```
@@ -190,7 +192,7 @@ Make secret-backed CI usage practical but conservative.
 
 Acceptance:
 
-- documented GitHub Actions recipe using CI secrets and Xvfb;
+- documented GitHub Actions example using CI secrets and Xvfb;
 - traces/videos disabled by default;
 - artifacts uploaded only after redaction and verifier pass;
 - fail if `.env`, profiles, extensions, traces, reports, or raw wallet artifacts become tracked.
@@ -236,5 +238,5 @@ Agents should not receive raw secrets, full profiles, full wallet addresses, or 
 2. **Generalize policy helpers.** Keep reusable origin/chain/account/value checks in package APIs while selectors and dapp assertions stay in consumer repos.
 3. **Expand negative fixtures.** Cover wrong origin, wrong chain, bad account, unexpected prompt, and unsafe transaction value.
 4. **Add prompt classifier tests.** Use fake Playwright pages to cover connect/network/sign/transaction/unknown prompt text without launching MetaMask in CI.
-5. **Document conservative CI.** Provide a GitHub Actions recipe for fixture connect QA with Xvfb and secret-backed burner config.
+5. **Document conservative CI.** Provide a GitHub Actions example for fixture connect QA with Xvfb and secret-backed burner config.
 6. **Then expand beyond connect.** Add signature QA, then zero-value/capped transaction QA, only after connect QA is stable and policy-gated.

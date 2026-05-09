@@ -16,16 +16,24 @@ Lets you do stuff like:
 ```ts
 import { test } from '@broccolo1d/playwright';
 
-test('wallet connects and approves transactions', async ({ page, wallet, walletArtifacts }) => {
+test('wallet connects on Sepolia', async ({ page, wallet, walletArtifacts }) => {
   await page.goto('http://127.0.0.1:5173');
   
-  // Playwright interacts with dapp UI while wallet handles MetaMask prompts automatically
+  // Your test drives the dapp UI; configured wallet drivers approve only expected prompts.
   const result = await wallet.connect({
-    requestConnection: async () => page.getByRole('button', { name: /connect/i }).click()
+    click: async () => page.getByRole('button', { name: /connect/i }).click()
   });
   
-  console.log('Connected as:', result.activeAccount);
-  // Connected as: 0x1234567890123456789012345678901234567890
+  await wallet.expectConnected();
+  await wallet.expectChain({ expectedChainId: 11155111 });
+
+  const screenshot = await walletArtifacts.screenshot('connected');
+  await walletArtifacts.connectedProof('wallet-connected', {
+    origin: 'http://127.0.0.1:5173',
+    account: result.activeAccount,
+    chainId: result.chainId,
+    attachments: [{ label: 'dapp-connected', path: screenshot, contentType: 'image/png' }]
+  });
 });
 ```
 
@@ -34,8 +42,8 @@ test('wallet connects and approves transactions', async ({ page, wallet, walletA
 
 | Package | Version | Purpose |
 | --- | ---: | --- |
-| [`@broccolo1d/wallet-browser`](packages/wallet-browser/README.md) | `0.2.1` | Core browser automation for MetaMask integration with Chromium context management and wallet state verification. |
-| [`@broccolo1d/playwright`](packages/playwright/README.md) | `0.2.1` | Playwright test fixtures and utilities for wallet-integrated dapp testing with structured proof artifacts. |
+| [`@broccolo1d/wallet-browser`](packages/wallet-browser/README.md) | `0.2.2` | Core browser automation for MetaMask integration with Chromium context management and wallet state verification. |
+| [`@broccolo1d/playwright`](packages/playwright/README.md) | `0.2.2` | Playwright test fixtures and utilities for wallet-integrated dapp testing with structured proof artifacts. |
 
 
 ## Runtime model
@@ -124,26 +132,26 @@ test('connects with explicit wallet policy', async ({ page, wallet, walletArtifa
   await page.goto('http://127.0.0.1:5173');
 
   const result = await wallet.connect({
-    requestConnection: async () => page.getByRole('button', { name: /connect/i }).click()
+    click: async () => page.getByRole('button', { name: /connect/i }).click()
   });
 
-  await wallet.assertState();
+  await wallet.expectConnected();
+  await wallet.expectChain({ expectedChainId: 11155111 });
   const screenshot = await walletArtifacts.screenshot('connected');
 
-  await walletArtifacts.writeProofManifest({
-    status: 'connected',
+  await walletArtifacts.connectedProof('wallet-connected', {
     origin: 'http://127.0.0.1:5173',
     account: result.activeAccount,
     chainId: result.chainId,
     attachments: [{ label: 'dapp-connected', path: screenshot, contentType: 'image/png' }]
   });
 
-  await verifyWalletQaProofManifest(walletArtifacts.artifactDir);
+  await verifyWalletQaProofManifest(walletArtifacts.artifactDir, 'wallet-connected.json');
   await expect(page.getByText(/connected/i)).toBeVisible();
 });
 ```
 
-`useRealWallet` defaults to `false`. When enabled, `wallet.connect` still requires expected account, expected chain, a dapp trigger, `walletConfig.prompt`, and `walletConfig.network`.
+`useRealWallet` defaults to `false`. When enabled, `wallet.connect` still requires expected account, expected chain, a dapp trigger (`click`, legacy `requestConnection`, `walletConfig.dapp`, or `walletConfig.dappSelectors`), `walletConfig.prompt`, and `walletConfig.network`.
 
 ## Lower-level wallet-browser usage
 

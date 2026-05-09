@@ -6,6 +6,8 @@ import { describe, expect, it } from 'vitest';
 
 import {
   createFailClosedWalletPromptDriver,
+  createWalletArtifacts,
+  createWalletQa,
   formatWalletQaFailure,
   redactWalletQaValue,
   verifyWalletQaProofManifest,
@@ -20,6 +22,128 @@ const CHAIN_ID_HEX = '0xaa36a7';
 async function tempArtifactDir(): Promise<string> {
   return mkdtemp(join(tmpdir(), 'wallet-qa-helper-'));
 }
+
+function createNetworkStub(account = ACCOUNT, chainId = 11155111) {
+  return {
+    async getChainId() { return chainId; },
+    async getAccounts() { return [account]; },
+    async switchChain() {},
+    async addEthereumChain() {}
+  };
+}
+
+describe('developer-first wallet QA fixture helpers', () => {
+  it('supports wallet.connect({ click }) while preserving configured dapp state reads', async () => {
+    const events: string[] = [];
+    const wallet = createWalletQa(undefined as any, {
+      expectedAccount: ACCOUNT,
+      expectedChainId: 11155111,
+      origin: 'https://app.example',
+      dapp: {
+        async requestConnect() { events.push('configured-dapp-request'); },
+        async getConnectedAccount() { events.push('dapp-account'); return ACCOUNT; }
+      },
+      prompt: {
+        async approveConnection(input) { events.push(`prompt:${input.origin}`); }
+      },
+      network: createNetworkStub()
+    });
+
+    await expect(wallet.connect({
+      click: async () => { events.push('click'); }
+    })).resolves.toMatchObject({ status: 'connected', activeAccount: ACCOUNT, chainId: 11155111 });
+
+    expect(events).toEqual(['click', 'prompt:https://app.example', 'dapp-account']);
+  });
+
+  it('keeps wallet.connect({ requestConnection }) backwards compatible', async () => {
+    const events: string[] = [];
+    const wallet = createWalletQa(undefined as any, {
+      expectedAccount: ACCOUNT,
+      expectedChainId: 11155111,
+      origin: 'https://app.example',
+      dapp: { async requestConnect() {}, async getConnectedAccount() { return ACCOUNT; } },
+      prompt: { async approveConnection() { events.push('prompt'); } },
+      network: createNetworkStub()
+    });
+
+    await wallet.connect({ requestConnection: async () => { events.push('requestConnection'); } });
+    expect(events).toEqual(['requestConnection', 'prompt']);
+  });
+
+  it('provides readable expectConnected and expectChain assertions', async () => {
+    const wallet = createWalletQa(undefined as any, {
+      expectedAccount: ACCOUNT,
+      expectedChainId: 11155111,
+      network: createNetworkStub()
+    });
+
+    await expect(wallet.expectConnected()).resolves.toMatchObject({ status: 'verified', activeAccount: ACCOUNT, chainId: 11155111 });
+    await expect(wallet.expectConnected({ expectedAccount: ACCOUNT, expectedChainId: 11155111 })).resolves.toMatchObject({ status: 'verified' });
+    await expect(wallet.expectChain({ expectedChainId: 11155111 })).resolves.toMatchObject({ status: 'verified', chainId: 11155111 });
+  });
+
+  it('fails closed with actionable missing dapp action and expectation errors', async () => {
+    const wallet = createWalletQa(undefined as any, {
+      expectedAccount: ACCOUNT,
+      expectedChainId: 11155111,
+      prompt: { async approveConnection() {} },
+      network: createNetworkStub()
+    });
+
+    await expect(wallet.connect()).rejects.toThrow(/origin.*wallet\.connect|walletConfig\.origin/i);
+
+    const withoutOrigin = createWalletQa(undefined as any, {
+      expectedAccount: ACCOUNT,
+      expectedChainId: 11155111,
+      prompt: { async approveConnection() {} },
+      network: createNetworkStub()
+    });
+    await expect(withoutOrigin.connect({ click: async () => {} })).rejects.toThrow(/origin.*wallet\.connect|walletConfig\.origin/i);
+
+    const withoutDappAction = createWalletQa(undefined as any, {
+      expectedAccount: ACCOUNT,
+      expectedChainId: 11155111,
+      origin: 'https://app.example',
+      prompt: { async approveConnection() {} },
+      network: createNetworkStub()
+    });
+    await expect(withoutDappAction.connect()).rejects.toThrow(/click|requestConnection|walletConfig\.dapp|walletConfig\.dappSelectors/i);
+
+    const chainOnly = createWalletQa(undefined as any, {
+      expectedChainId: 11155111,
+      network: createNetworkStub()
+    });
+    await expect(chainOnly.expectChain()).rejects.toThrow(/wallet\.expectChain.*expectedChainId/i);
+    await expect(chainOnly.expectChain({ expectedChainId: 11155111 })).rejects.toThrow(/wallet\.expectChain.*expectedAccount.*walletConfig/i);
+  });
+
+  it('writes connectedProof manifests with masked accounts and no path leakage', async () => {
+    const artifactDir = await tempArtifactDir();
+    const screenshot = join(artifactDir, 'connected.png');
+    await writeFile(screenshot, 'fake image bytes');
+    const page = { screenshot: async ({ path }: { path: string }) => writeFile(path, 'fake png') };
+    const artifacts = createWalletArtifacts(page as any, { artifactDir }, { project: { name: 'chromium' }, title: 'connects wallet' } as any);
+
+    const manifestPath = await artifacts.connectedProof('dapp-connected', {
+      origin: 'https://app.example',
+      account: ACCOUNT,
+      chainId: 11155111,
+      attachments: [{ label: 'wallet-connected', path: screenshot, contentType: 'image/png' }],
+      notes: [`reviewed without exposing ${ACCOUNT} or /home/alice/private/profile`]
+    });
+
+    const manifestText = await readFile(manifestPath, 'utf8');
+    expect(manifestText).toContain('0x1111…1111');
+    expect(manifestText).toContain('dapp-connected.json');
+    expect(manifestText).not.toContain(ACCOUNT);
+    expect(manifestText).not.toContain(artifactDir);
+    expect(manifestText).not.toContain('/home/alice');
+    await expect(verifyWalletQaProofManifest(artifacts.artifactDir, 'dapp-connected.json')).resolves.toMatchObject({
+      manifest: { status: 'connected', maskedAccount: '0x1111…1111' }
+    });
+  });
+});
 
 describe('fail-closed wallet prompt driver', () => {
   it('requires an expected origin before any prompt can be approved', () => {
