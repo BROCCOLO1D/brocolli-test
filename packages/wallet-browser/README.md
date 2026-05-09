@@ -2,7 +2,7 @@
 
 Core browser-wallet runtime helpers for dapp QA.
 
-This package owns launch configuration, MetaMask-oriented browser helpers, prompt guardrails, network/account assertions, local smoke artifacts, proof verification, and the `wallet-browser` CLI. It is the lower-level dependency used by `@broccolo1d/playwright`.
+This package owns launch configuration, MetaMask-oriented browser helpers, prompt guardrails, network/account assertions, local smoke artifacts, proof verification, and the `wallet-browser` CLI. It is the lower-level dependency used by `@broccolo1d/playwright`; use the Playwright package for ergonomic app-owned fixtures and public proof manifests.
 
 ## Install
 
@@ -108,3 +108,4 @@ Never commit `.env`, wallet profiles, extension bundles, traces, screenshots, vi
 - Smoke commands launch Chromium and capture local-only screenshots, but do not import, unlock, connect, sign, or transact.
 - Prompt approval requires explicit prompt-driver support and guardrail policy.
 - Unknown prompts, signatures, and transactions fail closed unless intentionally supported by the caller.
+- The ergonomic Playwright helper layer verifies public manifests without storing full local paths or full wallet addresses.

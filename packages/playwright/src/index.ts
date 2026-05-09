@@ -1,5 +1,7 @@
-import { mkdir, writeFile } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { createHash } from 'node:crypto';
+import { existsSync } from 'node:fs';
+import { mkdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 
 import { defineConfig, expect, test as base, type BrowserContext, type Page, type PlaywrightTestConfig, type TestInfo } from '@playwright/test';
 import {
@@ -65,6 +67,14 @@ export interface WalletConnectOptions {
   guardrails?: WalletGuardrailConfig;
 }
 
+export interface FailClosedWalletPromptDriverOptions {
+  origin?: string;
+  expectedAccount: string;
+  expectedChainIdHex: string;
+  /** Explicit prompt automation. Missing handlers reject instead of approving. */
+  delegate?: WalletPromptDriver;
+}
+
 export interface WalletAssertStateOptions {
   expectedAccount?: string;
   expectedChainId?: string | number;
@@ -80,6 +90,57 @@ export interface WalletArtifacts {
   artifactDir: string;
   screenshot(name: string, options?: Parameters<Page['screenshot']>[0]): Promise<string>;
   writeManifest(name: string, data: Record<string, unknown>): Promise<string>;
+  writeProofManifest(options: Omit<WalletQaProofManifestOptions, 'artifactDir'>): Promise<string>;
+  writeFailureManifest(name: string, error: unknown, data?: Record<string, unknown>): Promise<string>;
+}
+
+export type WalletQaProofStatus = 'connected' | 'failed';
+
+export interface WalletQaProofAttachment {
+  label: string;
+  /** Local file to hash. The manifest stores only a safe basename. */
+  path: string;
+  /** Optional public basename override. Absolute paths and nested paths are rejected. */
+  publicFile?: string;
+  contentType?: string;
+}
+
+export interface WalletQaProofArtifact {
+  label: string;
+  file: string;
+  sizeBytes: number;
+  sha256: string;
+  contentType?: string;
+}
+
+export interface WalletQaProofManifest {
+  artifactType: 'wallet-qa-proof';
+  status: WalletQaProofStatus;
+  origin?: string;
+  maskedAccount?: string;
+  chainId?: number | string;
+  artifacts: WalletQaProofArtifact[];
+  failure?: string;
+  notes?: string[];
+}
+
+export interface WalletQaProofManifestOptions {
+  artifactDir: string;
+  manifestName?: string;
+  status: WalletQaProofStatus;
+  origin?: string;
+  account?: string;
+  chainId?: number | string;
+  attachments?: WalletQaProofAttachment[];
+  failure?: unknown;
+  notes?: string[];
+}
+
+export interface WalletQaProofVerificationResult {
+  status: 'verified';
+  artifactDir: string;
+  manifestPath: string;
+  manifest: WalletQaProofManifest;
 }
 
 export interface WalletQaFixtures {
@@ -211,8 +272,204 @@ function createWalletArtifacts(page: Page, config: WalletQaConfig, testInfo: Tes
       await mkdir(dirname(filePath), { recursive: true });
       await writeFile(filePath, `${JSON.stringify(data, null, 2)}\n`, 'utf8');
       return filePath;
+    },
+    async writeProofManifest(options) {
+      return writeWalletQaProofManifest({ ...options, artifactDir: runDir });
+    },
+    async writeFailureManifest(name, error, data = {}) {
+      return this.writeManifest(name, { ...data, failure: formatWalletQaFailure(error) });
     }
   };
+}
+
+export function createFailClosedWalletPromptDriver(options: FailClosedWalletPromptDriverOptions): Required<WalletPromptDriver> {
+  const expectedAccount = normalizeAddressForComparison(options.expectedAccount);
+  const expectedChainIdHex = options.expectedChainIdHex.toLowerCase();
+  return {
+    async approveConnection(input) {
+      assertPromptOrigin(input.origin, options.origin);
+      assertPromptAccount(input.expectedAccount, expectedAccount);
+      if (input.expectedChainIdHex.toLowerCase() !== expectedChainIdHex) {
+        throw new Error(`Wallet connection prompt chain ${input.expectedChainIdHex} does not match expected ${expectedChainIdHex}; fail closed.`);
+      }
+      if (!options.delegate?.approveConnection) {
+        throw new Error('Wallet connection prompt approval is not configured; fail closed.');
+      }
+      await options.delegate.approveConnection(input);
+    },
+    async approveSignature(input) {
+      assertPromptOrigin(input.origin, options.origin);
+      assertPromptAccount(input.expectedAccount, expectedAccount);
+      if (!options.delegate?.approveSignature) {
+        throw new Error('Unexpected signature prompt; fail closed.');
+      }
+      await options.delegate.approveSignature(input);
+    },
+    async approveTransaction(input) {
+      assertPromptOrigin(input.origin, options.origin);
+      assertPromptAccount(input.expectedAccount, expectedAccount);
+      if (!options.delegate?.approveTransaction) {
+        throw new Error('Unexpected transaction prompt; fail closed.');
+      }
+      await options.delegate.approveTransaction(input);
+    }
+  };
+}
+
+export async function writeWalletQaProofManifest(options: WalletQaProofManifestOptions): Promise<string> {
+  const artifactDir = resolve(options.artifactDir);
+  const manifestName = options.manifestName ?? 'wallet-qa-proof.json';
+  assertSafeArtifactBasename(manifestName, 'manifest name');
+  await mkdir(artifactDir, { recursive: true });
+
+  const artifacts = await Promise.all((options.attachments ?? []).map((attachment) => createProofArtifact(artifactDir, attachment)));
+  const manifest: WalletQaProofManifest = {
+    artifactType: 'wallet-qa-proof',
+    status: options.status,
+    ...(options.origin ? { origin: assertSafeOrigin(options.origin) } : {}),
+    ...(options.account ? { maskedAccount: maskEthereumAddress(options.account) } : {}),
+    ...(options.chainId !== undefined ? { chainId: options.chainId } : {}),
+    artifacts,
+    ...(options.failure !== undefined ? { failure: formatWalletQaFailure(options.failure) } : {}),
+    ...(options.notes ? { notes: options.notes.map((note) => redactWalletQaValue(note)) } : {})
+  };
+
+  const text = `${JSON.stringify(manifest, null, 2)}\n`;
+  assertPublicManifestIsSafe(text, artifactDir);
+  const manifestPath = join(artifactDir, manifestName);
+  await writeFile(manifestPath, text, 'utf8');
+  return manifestPath;
+}
+
+export async function verifyWalletQaProofManifest(artifactDir: string, manifestName = 'wallet-qa-proof.json'): Promise<WalletQaProofVerificationResult> {
+  const resolvedArtifactDir = resolve(artifactDir);
+  assertSafeArtifactBasename(manifestName, 'manifest name');
+  const manifestPath = join(resolvedArtifactDir, manifestName);
+  const text = await readFile(manifestPath, 'utf8');
+  assertPublicManifestIsSafe(text, resolvedArtifactDir);
+  const manifest = JSON.parse(text) as WalletQaProofManifest;
+  if (manifest.artifactType !== 'wallet-qa-proof') {
+    throw new Error('Wallet QA proof manifest has an unexpected artifact type.');
+  }
+  if (manifest.status !== 'connected' && manifest.status !== 'failed') {
+    throw new Error('Wallet QA proof manifest has an unexpected status.');
+  }
+  if (!Array.isArray(manifest.artifacts)) {
+    throw new Error('Wallet QA proof manifest artifacts must be an array.');
+  }
+  for (const artifact of manifest.artifacts) {
+    await verifyProofArtifact(resolvedArtifactDir, artifact);
+  }
+  return { status: 'verified', artifactDir: resolvedArtifactDir, manifestPath, manifest };
+}
+
+export function formatWalletQaFailure(error: unknown): string {
+  const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
+  return redactWalletQaValue(message);
+}
+
+export function redactWalletQaValue(value: unknown): string {
+  return redactPaths(redactFullAddresses(typeof value === 'string' ? value : JSON.stringify(value, null, 2)));
+}
+
+async function createProofArtifact(artifactDir: string, attachment: WalletQaProofAttachment): Promise<WalletQaProofArtifact> {
+  const file = attachment.publicFile ?? basename(attachment.path);
+  assertSafeArtifactBasename(file, 'attachment file');
+  if (!existsSync(attachment.path)) {
+    throw new Error(`Wallet QA proof attachment is missing: ${file}`);
+  }
+  const bytes = await readFile(attachment.path);
+  const fileStat = await stat(attachment.path);
+  const artifact: WalletQaProofArtifact = {
+    label: sanitizeLabel(attachment.label),
+    file,
+    sizeBytes: fileStat.size,
+    sha256: createHash('sha256').update(bytes).digest('hex')
+  };
+  if (attachment.contentType) {
+    artifact.contentType = attachment.contentType;
+  }
+  return artifact;
+}
+
+async function verifyProofArtifact(artifactDir: string, artifact: WalletQaProofArtifact): Promise<void> {
+  assertSafeArtifactBasename(artifact.file, 'artifact file');
+  if (!/^[0-9a-f]{64}$/.test(artifact.sha256)) {
+    throw new Error(`Wallet QA proof artifact hash is invalid for ${artifact.file}.`);
+  }
+  const artifactPath = join(artifactDir, artifact.file);
+  if (!existsSync(artifactPath)) {
+    throw new Error(`Wallet QA proof artifact is missing: ${artifact.file}`);
+  }
+  const bytes = await readFile(artifactPath);
+  const fileStat = await stat(artifactPath);
+  const sha256 = createHash('sha256').update(bytes).digest('hex');
+  if (artifact.sizeBytes !== fileStat.size) {
+    throw new Error(`Wallet QA proof artifact size mismatch for ${artifact.file}.`);
+  }
+  if (artifact.sha256 !== sha256) {
+    throw new Error(`Wallet QA proof artifact hash mismatch for ${artifact.file}.`);
+  }
+}
+
+function assertPromptOrigin(actual: string | undefined, expected: string | undefined): void {
+  if (expected !== undefined && actual !== expected) {
+    throw new Error(`Wallet prompt origin ${actual ?? '<missing>'} does not match expected ${expected}; fail closed.`);
+  }
+}
+
+function assertPromptAccount(actual: string, expected: string): void {
+  if (normalizeAddressForComparison(actual) !== expected) {
+    throw new Error(`Wallet prompt account ${maskEthereumAddress(actual)} does not match expected ${maskEthereumAddress(expected)}; fail closed.`);
+  }
+}
+
+function normalizeAddressForComparison(address: string): string {
+  if (!/^0x[0-9a-fA-F]{40}$/.test(address)) {
+    throw new Error('Wallet prompt account must be a full 0x-prefixed address; fail closed.');
+  }
+  return address.toLowerCase();
+}
+
+function assertPublicManifestIsSafe(text: string, artifactDir: string): void {
+  if (text.includes(artifactDir)) {
+    throw new Error('Wallet QA proof manifest must not contain the full artifact directory path.');
+  }
+  if (/0x[0-9a-fA-F]{40}/.test(text)) {
+    throw new Error('Wallet QA proof manifest must not contain full wallet addresses.');
+  }
+}
+
+function assertSafeArtifactBasename(fileName: string, label: string): void {
+  if (isAbsolute(fileName) || fileName !== basename(fileName) || fileName.includes('..') || fileName.length === 0) {
+    throw new Error(`Wallet QA proof ${label} must be a safe basename.`);
+  }
+}
+
+function assertSafeOrigin(origin: string): string {
+  try {
+    const parsed = new URL(origin);
+    if ((parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.search === '' && parsed.hash === '') {
+      return origin;
+    }
+  } catch {
+    // handled below
+  }
+  throw new Error('Wallet QA proof origin must be an http(s) origin without query strings or hashes.');
+}
+
+function sanitizeLabel(value: string): string {
+  return sanitizePathPart(value);
+}
+
+function redactFullAddresses(value: string): string {
+  return value.replace(/0x[0-9a-fA-F]{40}/g, (address) => maskEthereumAddress(address));
+}
+
+function redactPaths(value: string): string {
+  return value
+    .replace(/[A-Za-z]:\\(?:[^\\\s]+\\)*([^\\\s]+)/g, '[path]/$1')
+    .replace(/\/(?:[^/\s]+\/)+([^/\s]+)/g, '[path]/$1');
 }
 
 function requireConfigured<T>(value: T | undefined, message: string): T {

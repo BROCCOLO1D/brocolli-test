@@ -18,7 +18,8 @@ Implemented today:
 - redacted launch, onboarding, network, and smoke-artifact CLI commands;
 - connect-oriented wallet control helpers with chain/account/origin guardrails;
 - Playwright fixtures for app-owned dapp QA specs;
-- local-only smoke screenshot manifests and verifiers;
+- fail-closed prompt guard helpers for explicit origin/account/chain policy;
+- local-only smoke screenshot manifests and wallet QA proof manifests with basename/hash/size verification;
 - tracked-file and git-history sensitive-content scan.
 
 Not claimed:
@@ -120,21 +121,40 @@ test('connects with explicit wallet policy', async ({ page, wallet, walletArtifa
     origin: 'http://127.0.0.1:5173'
   });
 
-  await walletArtifacts.screenshot('connected');
+  const screenshot = await walletArtifacts.screenshot('connected');
+  await walletArtifacts.writeProofManifest({
+    status: 'connected',
+    origin: 'http://127.0.0.1:5173',
+    account: '0x0000000000000000000000000000000000000000',
+    chainId: 11155111,
+    attachments: [{ label: 'wallet-connected', path: screenshot, contentType: 'image/png' }]
+  });
   await expect(page.getByText(/connected/i)).toBeVisible();
 });
 ```
 
 ```ts
 // playwright.config.ts
-import { defineWalletQaConfig, type MetaMaskNetworkDriver, type WalletPromptDriver } from '@broccolo1d/playwright';
+import {
+  createFailClosedWalletPromptDriver,
+  defineWalletQaConfig,
+  type MetaMaskNetworkDriver,
+  type WalletPromptDriver
+} from '@broccolo1d/playwright';
 
 const expectedAccount = '0x0000000000000000000000000000000000000000';
+const origin = 'http://127.0.0.1:5173';
 
-// Replace these fake drivers with explicit prompt/network automation in real wallet jobs.
-const prompt: WalletPromptDriver = {
+// Replace this fake delegate with explicit prompt automation in real wallet jobs.
+const promptDelegate: WalletPromptDriver = {
   async approveConnection() {}
 };
+const prompt = createFailClosedWalletPromptDriver({
+  origin,
+  expectedAccount,
+  expectedChainIdHex: '0xaa36a7',
+  delegate: promptDelegate
+});
 
 const network: MetaMaskNetworkDriver = {
   async getChainId() { return 11155111; },
@@ -155,7 +175,7 @@ export default defineWalletQaConfig({
 });
 ```
 
-`useRealWallet` defaults to `false`. When enabled, `wallet.connect` still fails closed unless a prompt driver and network driver are configured.
+`useRealWallet` defaults to `false`. When enabled, `wallet.connect` still fails closed unless a prompt driver and network driver are configured. `writeProofManifest` stores public proof metadata with attachment basenames, sha256 hashes, sizes, masked accounts, and redacted failures; use `verifyWalletQaProofManifest` before promoting any artifact manifest.
 
 ## Using `@broccolo1d/wallet-browser`
 

@@ -2,7 +2,7 @@
 
 Playwright fixtures for wallet-backed dapp QA.
 
-This package extends `@playwright/test` with wallet fixtures while keeping dapp-specific selectors, routes, test data, and assertions in the consuming app repository. It depends on `@broccolo1d/wallet-browser` for browser launch, guardrails, network assertions, prompt drivers, and artifact helpers.
+App repos own routes, selectors, prompt automation, test data, and assertions. This package supplies a small fixture surface for connect/account/chain proof without hiding wallet policy.
 
 ## Install
 
@@ -10,57 +10,33 @@ This package extends `@playwright/test` with wallet fixtures while keeping dapp-
 pnpm add -D @broccolo1d/playwright @playwright/test
 ```
 
-The package is ESM-only and requires Node.js `>=22 <23`.
+ESM-only. Node.js `>=22 <23`.
 
 ## Configure
 
 ```ts
 // playwright.config.ts
-import { defineWalletQaConfig } from '@broccolo1d/playwright';
-
-export default defineWalletQaConfig({
-  use: {
-    walletConfig: {
-      useRealWallet: false,
-      artifactDir: '.wallet-artifacts/playwright'
-    }
-  }
-});
-```
-
-`useRealWallet` defaults to `false`. Enable it only in burner/testnet jobs that provide wallet extension/profile configuration through explicit options or ignored environment config.
-
-## Write a dapp-owned test
-
-```ts
-// tests/wallet.spec.ts
-import { expect, test } from '@broccolo1d/playwright';
-
-test('connects through wallet policy', async ({ page, wallet, walletArtifacts }) => {
-  await page.goto('http://127.0.0.1:5173');
-
-  await wallet.connect({
-    requestConnection: async () => page.getByRole('button', { name: /connect/i }).click(),
-    expectedAccount: '0x0000000000000000000000000000000000000000',
-    expectedChainId: 11155111,
-    origin: 'http://127.0.0.1:5173'
-  });
-
-  await walletArtifacts.screenshot('connected');
-  await expect(page.getByText(/connected/i)).toBeVisible();
-});
-```
-
-```ts
-// playwright.config.ts
-import { defineWalletQaConfig, type MetaMaskNetworkDriver, type WalletPromptDriver } from '@broccolo1d/playwright';
+import {
+  createFailClosedWalletPromptDriver,
+  defineWalletQaConfig,
+  type MetaMaskNetworkDriver,
+  type WalletPromptDriver
+} from '@broccolo1d/playwright';
 
 const expectedAccount = '0x0000000000000000000000000000000000000000';
+const origin = 'http://127.0.0.1:5173';
 
-// Replace these fake drivers with explicit prompt/network automation in real wallet jobs.
-const prompt: WalletPromptDriver = {
+// Replace with explicit prompt automation in real wallet jobs.
+const delegate: WalletPromptDriver = {
   async approveConnection() {}
 };
+
+const prompt = createFailClosedWalletPromptDriver({
+  origin,
+  expectedAccount,
+  expectedChainIdHex: '0xaa36a7',
+  delegate
+});
 
 const network: MetaMaskNetworkDriver = {
   async getChainId() { return 11155111; },
@@ -74,6 +50,9 @@ export default defineWalletQaConfig({
     walletConfig: {
       useRealWallet: false,
       artifactDir: '.wallet-artifacts/playwright',
+      expectedAccount,
+      expectedChainId: 11155111,
+      origin,
       prompt,
       network
     }
@@ -81,20 +60,69 @@ export default defineWalletQaConfig({
 });
 ```
 
+`useRealWallet` defaults to `false`. When enabled, launch config is passed to `@broccolo1d/wallet-browser`, but prompt approval and network reads still require explicit drivers.
+
+## Write a dapp-owned test
+
+```ts
+// tests/wallet.spec.ts
+import { expect, test, verifyWalletQaProofManifest } from '@broccolo1d/playwright';
+
+test('connects through wallet policy', async ({ page, wallet, walletArtifacts }) => {
+  await page.goto('http://127.0.0.1:5173');
+
+  const result = await wallet.connect({
+    requestConnection: async () => page.getByRole('button', { name: /connect/i }).click()
+  });
+
+  await wallet.assertState();
+  const screenshot = await walletArtifacts.screenshot('connected');
+  await walletArtifacts.writeProofManifest({
+    status: 'connected',
+    origin: 'http://127.0.0.1:5173',
+    account: result.activeAccount,
+    chainId: result.chainId,
+    attachments: [{ label: 'wallet-connected', path: screenshot, contentType: 'image/png' }]
+  });
+
+  await verifyWalletQaProofManifest(walletArtifacts.artifactDir);
+  await expect(page.getByText(/connected/i)).toBeVisible();
+});
+```
+
 ## Fixtures
 
 - `walletConfig`: per-test wallet QA configuration.
-- `walletContext`: browser context used by the test.
-- `walletPage`: page used by the test.
-- `wallet`: connect/assert/masking helper.
-- `walletArtifacts`: screenshot and JSON manifest writer under the configured local artifact directory.
+- `walletContext`: the browser context under test.
+- `walletPage`: the page under test.
+- `wallet`: `connect`, `assertState`, and `maskAddress` helpers.
+- `walletArtifacts`: screenshot, JSON, proof-manifest, and failure-manifest writers.
+
+## Helpers
+
+- `createFailClosedWalletPromptDriver(options)`: wraps an explicit prompt driver and rejects missing handlers, wrong origin, wrong account, or wrong chain.
+- `writeWalletQaProofManifest(options)`: writes a public manifest with attachment basename, sha256, size, masked account, safe origin, and redacted failure text.
+- `verifyWalletQaProofManifest(artifactDir)`: verifies manifest shape and attachment hashes/sizes.
+- `formatWalletQaFailure(error)` / `redactWalletQaValue(value)`: produce doc-safe failure snippets by masking wallet addresses and local paths.
+
+## Failure proof
+
+```ts
+try {
+  await wallet.assertState({ expectedChainId: 1 });
+} catch (error) {
+  await walletArtifacts.writeProofManifest({
+    status: 'failed',
+    failure: error,
+    notes: ['negative proof: wrong chain is rejected']
+  });
+}
+```
+
+The manifest is public-oriented metadata. It must not contain full local paths or full wallet addresses. Treat raw screenshots, traces, videos, and profiles as sensitive until reviewed.
 
 ## Fail-closed behavior
 
-`wallet.connect` requires expected account and chain ID. It also requires one of `requestConnection`, `walletConfig.dapp`, or `walletConfig.dappSelectors` to trigger the dapp connection flow.
+`wallet.connect` requires expected account and chain ID in options or config. It also requires one of `requestConnection`, `walletConfig.dapp`, or `walletConfig.dappSelectors` to trigger the dapp flow.
 
-Real prompt approval is not implicit. A configured prompt driver is required for wallet prompts. A configured network driver is required for chain/account assertions. Without those drivers, the fixtures throw instead of pretending that a wallet action succeeded.
-
-## Artifact handling
-
-`walletArtifacts` writes local screenshots and JSON under `.wallet-artifacts/playwright` by default. Treat those files as sensitive until reviewed. Do not commit traces, screenshots, videos, profiles, reports, or manifests generated from burner-wallet runs unless they have been scrubbed and intentionally promoted to public docs.
+No prompt approval is implicit. No signature or transaction approval is claimed by this package-level fixture API. Use lower-level wallet-browser helpers only with explicit policy and tests.
