@@ -68,7 +68,8 @@ export interface WalletConnectOptions {
 }
 
 export interface FailClosedWalletPromptDriverOptions {
-  origin?: string;
+  /** Required dapp origin. Prompt approvals fail closed without an explicit expected origin. */
+  origin: string;
   expectedAccount: string;
   expectedChainIdHex: string;
   /** Explicit prompt automation. Missing handlers reject instead of approving. */
@@ -283,6 +284,9 @@ function createWalletArtifacts(page: Page, config: WalletQaConfig, testInfo: Tes
 }
 
 export function createFailClosedWalletPromptDriver(options: FailClosedWalletPromptDriverOptions): Required<WalletPromptDriver> {
+  if (!options.origin) {
+    throw new Error('Wallet prompt origin is required; fail closed.');
+  }
   const expectedAccount = normalizeAddressForComparison(options.expectedAccount);
   const expectedChainIdHex = options.expectedChainIdHex.toLowerCase();
   return {
@@ -438,6 +442,36 @@ function assertPublicManifestIsSafe(text: string, artifactDir: string): void {
   if (/0x[0-9a-fA-F]{40}/.test(text)) {
     throw new Error('Wallet QA proof manifest must not contain full wallet addresses.');
   }
+  if (containsLocalPathLeak(text)) {
+    throw new Error('Wallet QA proof manifest must not contain local path leaks.');
+  }
+}
+
+function containsLocalPathLeak(text: string): boolean {
+  try {
+    return publicManifestValueContainsLocalPath(JSON.parse(text));
+  } catch {
+    return hasLocalPath(text);
+  }
+}
+
+function publicManifestValueContainsLocalPath(value: unknown): boolean {
+  if (typeof value === 'string') {
+    return hasLocalPath(value);
+  }
+  if (Array.isArray(value)) {
+    return value.some(publicManifestValueContainsLocalPath);
+  }
+  if (value && typeof value === 'object') {
+    return Object.values(value).some(publicManifestValueContainsLocalPath);
+  }
+  return false;
+}
+
+function hasLocalPath(value: string): boolean {
+  return /file:\/\/\//i.test(value)
+    || /(?:^|[\s"'`([{<])(?:[A-Za-z]:\\|\\\\)[^\s"'`)\]}>]+/.test(value)
+    || /(?:^|[\s"'`([{<])\/(?!\/)(?:[^/\s"'`)\]}>]+\/)+[^/\s"'`)\]}>]*/.test(value);
 }
 
 function assertSafeArtifactBasename(fileName: string, label: string): void {

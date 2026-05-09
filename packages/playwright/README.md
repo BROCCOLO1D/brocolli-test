@@ -100,9 +100,9 @@ test('connects through wallet policy', async ({ page, wallet, walletArtifacts })
 
 ## Helpers
 
-- `createFailClosedWalletPromptDriver(options)`: wraps an explicit prompt driver and rejects missing handlers, wrong origin, wrong account, or wrong chain.
+- `createFailClosedWalletPromptDriver(options)`: wraps an explicit prompt driver and rejects missing handlers, missing/wrong origin, wrong account, or wrong chain.
 - `writeWalletQaProofManifest(options)`: writes a public manifest with attachment basename, sha256, size, masked account, safe origin, and redacted failure text.
-- `verifyWalletQaProofManifest(artifactDir)`: verifies manifest shape and attachment hashes/sizes.
+- `verifyWalletQaProofManifest(artifactDir)`: verifies manifest shape, attachment hashes/sizes, and rejects full addresses or local path leaks.
 - `formatWalletQaFailure(error)` / `redactWalletQaValue(value)`: produce doc-safe failure snippets by masking wallet addresses and local paths.
 
 ## Failure proof

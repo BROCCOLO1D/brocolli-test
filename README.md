@@ -175,7 +175,7 @@ export default defineWalletQaConfig({
 });
 ```
 
-`useRealWallet` defaults to `false`. When enabled, `wallet.connect` still fails closed unless a prompt driver and network driver are configured. `writeProofManifest` stores public proof metadata with attachment basenames, sha256 hashes, sizes, masked accounts, and redacted failures; use `verifyWalletQaProofManifest` before promoting any artifact manifest.
+`useRealWallet` defaults to `false`. When enabled, `wallet.connect` still fails closed unless a prompt driver and network driver are configured. Prompt approval also requires an explicit expected origin. `writeProofManifest` stores public proof metadata with attachment basenames, sha256 hashes, sizes, masked accounts, and redacted failures; use `verifyWalletQaProofManifest` before promoting any artifact manifest because it rejects full addresses and local path leaks.
 
 ## Using `@broccolo1d/wallet-browser`
 

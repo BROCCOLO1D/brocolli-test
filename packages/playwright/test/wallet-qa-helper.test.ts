@@ -22,6 +22,13 @@ async function tempArtifactDir(): Promise<string> {
 }
 
 describe('fail-closed wallet prompt driver', () => {
+  it('requires an expected origin before any prompt can be approved', () => {
+    expect(() => createFailClosedWalletPromptDriver({
+      expectedAccount: ACCOUNT,
+      expectedChainIdHex: CHAIN_ID_HEX
+    } as any)).toThrow(/origin.*required|fail closed/i);
+  });
+
   it('rejects unexpected prompts when no delegate approval is configured', async () => {
     const prompt = createFailClosedWalletPromptDriver({
       origin: 'https://app.example',
@@ -119,6 +126,33 @@ describe('wallet QA proof manifests', () => {
     }));
 
     await expect(verifyWalletQaProofManifest(artifactDir)).rejects.toThrow(/full wallet address|basename/i);
+  });
+
+  it('rejects general local path leaks in public manifest failure details', async () => {
+    const artifactDir = await tempArtifactDir();
+    const screenshot = join(artifactDir, 'connected.png');
+    await writeFile(screenshot, 'fake image bytes');
+
+    await writeWalletQaProofManifest({
+      artifactDir,
+      status: 'connected',
+      origin: 'https://app.example',
+      account: ACCOUNT,
+      chainId: 11155111,
+      attachments: [{ label: 'wallet-connected', path: screenshot, contentType: 'image/png' }]
+    });
+
+    const manifestPath = join(artifactDir, 'wallet-qa-proof.json');
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+    manifest.failure = 'Profile leaked from /home/alice/secret/profile.json';
+    manifest.details = {
+      windowsProfile: 'C:\\Users\\alice\\secret',
+      fileUrl: 'file:///tmp/foo',
+      repoPath: '/home/mcsweeja/repos/brocolli-test/packages/playwright/src/index.ts'
+    };
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+
+    await expect(verifyWalletQaProofManifest(artifactDir)).rejects.toThrow(/local path leak/i);
   });
 
   it('formats failed assertions with redacted accounts and paths for docs', () => {
