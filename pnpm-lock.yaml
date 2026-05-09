@@ -24,7 +24,7 @@ importers:
   packages/playwright:
     dependencies:
       '@broccolo1d/wallet-browser':
-        specifier: workspace:*
+        specifier: workspace:^
         version: link:../wallet-browser
     devDependencies:
       '@playwright/test':
