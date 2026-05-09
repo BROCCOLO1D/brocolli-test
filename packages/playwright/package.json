@@ -1,7 +1,7 @@
 {
   "name": "@brocolli-test/playwright",
   "version": "0.0.0",
-  "private": true,
+  "private": false,
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -12,6 +12,10 @@
     },
     "./package.json": "./package.json"
   },
+  "files": [
+    "dist/",
+    "package.json"
+  ],
   "scripts": {
     "build": "pnpm --filter @brocolli-test/wallet-browser build && tsc -p tsconfig.json",
     "test": "pnpm --filter @brocolli-test/wallet-browser build && vitest run",

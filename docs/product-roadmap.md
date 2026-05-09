@@ -25,21 +25,31 @@ The harness should make those answers repeatable for humans, CI, and agents.
 
 ## Near-term product shape
 
-### CLI
-
-```bash
-wallet qa connect --target fixture --policy policies/connect-only.json
-wallet qa connect --url https://testnet.wildcat.finance/lender --policy policies/wildcat-connect-only.json
-wallet qa verify .wallet-artifacts/<scenario>/<run-id>
-```
-
-### Library
+### Importable Playwright package
 
 ```ts
-const run = await runWalletQaScenario({
-  target: fixtureTarget(),
-  wallet: metamaskWallet({ profile: 'sepolia-burner' }),
-  policy: connectOnlyPolicy({ chainId: 11155111, origin: 'http://127.0.0.1:5173' })
+import { test, expect } from '@brocolli-test/playwright';
+
+test('connects app-owned wallet flow', async ({ page, wallet }) => {
+  await page.goto('/');
+  await wallet.connect({
+    requestConnection: async () => page.getByRole('button', { name: /connect/i }).click(),
+    expectedAccount: process.env.SEPOLIA_WALLET_ADDRESS!,
+    expectedChainId: 11155111,
+    origin: 'http://127.0.0.1:3000'
+  });
+  await expect(page.getByText(/connected/i)).toBeVisible();
+});
+```
+
+### Lower-level library
+
+```ts
+const browser = await launchWalletBrowser({ profileName: 'sepolia-burner' });
+await assertExpectedChainAndAccount({
+  driver: browser.network,
+  expectedChainId: 11155111,
+  expectedAccount: process.env.SEPOLIA_WALLET_ADDRESS!
 });
 ```
 
@@ -54,17 +64,18 @@ Each run should write a local-only directory with:
 
 ## Product milestones
 
-### 1. Scenario engine
+### 1. Importable package foundation
 
-Convert `scripts/live-fixture-connect.mjs` and `scripts/live-wildcat-connect.mjs` into one reusable scenario runner.
+Keep the public product centered on packages that downstream apps import, not target-specific shell scripts.
 
 Required pieces:
 
-- target config: URL, allowed origins, connect button strategy, wallet-choice strategy, expected post-connect checks;
+- `@brocolli-test/playwright` fixtures for app-owned specs;
+- `@brocolli-test/wallet-browser` core wallet runtime helpers;
 - wallet config: extension path/version, profile mode, burner account, network;
 - policy config: allowed prompt types, chains, accounts, value caps, contracts, typed-data domains;
 - artifact writer: manifest, screenshot registry, redacted logs;
-- verifier: one generic proof verifier plus target-specific assertions.
+- verifier helpers that downstream apps can call from their own tests/CI.
 
 ### 2. First-class connect QA
 
@@ -72,11 +83,11 @@ Make connect-only QA polished and repeatable.
 
 Acceptance:
 
-- fixture target passes from a fresh throwaway profile;
-- Wildcat testnet target passes from local burner config;
+- `broccoli-control` passes from a fresh throwaway profile;
+- the local Wildcat fork owns and passes its package-import smoke spec;
 - wrong-origin and wrong-chain fixtures fail before wallet approval;
 - artifacts prove connected provider state and dapp UI state;
-- CLI output is short, JSON-friendly, and redacted.
+- package logs and test output stay short, JSON-friendly, and redacted.
 
 ### 3. Prompt classifier and policy firewall
 
@@ -102,7 +113,7 @@ Policy behavior:
 
 ### 4. Signature QA
 
-Add safe signature testing with fixture dapp first.
+Add safe signature testing with `broccoli-control` first.
 
 Acceptance:
 
@@ -117,7 +128,7 @@ Add zero-value and capped-value transaction testing.
 
 Acceptance:
 
-- fixture zero-value transaction can be approved under policy;
+- `broccoli-control` zero-value/capped ERC20 transaction can be approved under policy;
 - non-zero value fails unless explicit cap allows it;
 - wrong target contract fails;
 - unsupported chain fails before `eth_sendTransaction` approval;
@@ -134,18 +145,17 @@ Acceptance:
 - artifacts uploaded only after redaction/verifier pass;
 - fail if `.env`, profiles, extensions, traces, or reports become tracked.
 
-### 7. Target registry
+### 7. App integration examples
 
-Add a target registry so dapp QA flows are data-driven instead of one-off scripts.
+Keep example integrations in downstream app repos so dapp-specific selectors and assertions stay app-owned.
 
-Example targets:
+Example consumers:
 
-- fixture;
-- Wildcat testnet lender;
-- additional known testnet dapps;
-- local Anvil/Hardhat fixture.
+- `BROCCOLO1D/broccoli-control`;
+- local `BROCCOLO1D/wildcat-app-v2` fork;
+- additional known testnet dapps.
 
-Each target should define allowed origins, expected chain(s), connect selectors, wallet modal behavior, and post-connect assertions.
+Each app should own its routes, connect selectors, wallet modal behavior, and post-connect assertions while importing shared wallet runtime/policy/artifact helpers from this package.
 
 ### 8. Agent integration
 
@@ -172,10 +182,10 @@ Agents should not receive raw secrets, full profiles, or unverified screenshot c
 
 ## Immediate progression steps
 
-1. **Refactor live runners into shared modules.** Extract MetaMask launch, onboarding/import, page discovery, prompt approval, Sepolia assertion, artifact writing, and verifier invocation from the fixture/Wildcat scripts.
-2. **Introduce target and policy config files.** Add `targets/fixture.json`, `targets/wildcat-lender.json`, and `policies/connect-only.json` as non-secret committed examples.
-3. **Build `wallet qa connect`.** One CLI command should run connect-only QA for any target config and emit a single redacted JSON result.
-4. **Unify proof manifests.** Replace fixture/Wildcat-specific manifest shapes with a generic `WALLET-QA-MANIFEST.json`, keeping target-specific verifier checks as plugins.
+1. **Publish package-ready builds.** Move from local tarballs to npm packages after the scope/account is ready, publishing `@brocolli-test/wallet-browser` before `@brocolli-test/playwright`.
+2. **Harden app-owned fixtures.** Expand `broccoli-control` tests for connect, wrong-chain, wrong-account, signature, and capped ERC20 transfer cases.
+3. **Generalize policy helpers.** Keep reusable origin/chain/account/value checks in package APIs while selectors and dapp assertions stay in consumer repos.
+4. **Unify proof manifests.** Provide a generic `WALLET-QA-MANIFEST.json` writer/verifier that downstream apps can call from their own Playwright tests.
 5. **Add negative fixtures.** Create fixture cases for wrong origin, wrong chain, bad account, and unexpected prompt so the policy layer proves it refuses unsafe flows.
 6. **Add prompt classifier tests.** Use fake Playwright pages to cover connect/network/sign/transaction/unknown prompt text without launching MetaMask in CI.
 7. **Document CI recipe.** Add a conservative GitHub Actions example for fixture connect QA with Xvfb and secret-backed burner config.
