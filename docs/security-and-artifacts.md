@@ -30,9 +30,12 @@ brocolli-test drives real wallet software. Even on testnets, browser profiles an
 A proof artifact is acceptable only when:
 
 - it has a manifest with target, scenario, status, masked account, chain ID, origin, screenshot basenames, screenshot hashes, and prompt decisions;
+- public proof manifests use schema v1 provenance where available: `schemaVersion`, `createdAt`, `runId`, package/framework/tool metadata, verifier-friendly summary fields, artifact checksum lists, and verifier-computed `manifestSha256` instead of self-hashing fields;
 - screenshots are captured after guardrails pass, or are clearly marked as redacted failure diagnostics;
 - verifiers reject wrong chains, wrong origins, missing screenshots, hash mismatches, unsafe screenshot names, full addresses, and local path leaks;
 - logs state whether any signing or transaction prompt was approved.
+
+Milestone 3 proof artifact hardening is implemented for package proof manifests: writers emit required schema v1 provenance, verifiers return `manifestSha256` and provenance metadata, and downgraded manifests without `schemaVersion` are rejected to prevent public proof contract bypasses.
 
 ## CI expectations
 

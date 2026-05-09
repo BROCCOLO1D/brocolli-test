@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, stat, writeFile, copyFile } from 'node:fs/promises';
 import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
@@ -121,7 +121,13 @@ export interface WalletQaProofArtifact {
 }
 
 export interface WalletQaProofManifest {
+  /** Schema v1 is required for verifier acceptance to prevent downgraded public proof artifacts. */
+  schemaVersion: 1;
   artifactType: 'wallet-qa-proof';
+  createdAt: string;
+  runId: string;
+  provenance: WalletQaProofProvenance;
+  test?: WalletQaProofTestMetadata;
   status: WalletQaProofStatus;
   origin?: string;
   maskedAccount?: string;
@@ -129,6 +135,40 @@ export interface WalletQaProofManifest {
   artifacts: WalletQaProofArtifact[];
   failure?: string;
   notes?: string[];
+  summary?: WalletQaProofSummary;
+  checksums?: WalletQaProofChecksums;
+}
+
+export interface WalletQaProofProvenance {
+  packageName: '@broccolo1d/playwright';
+  packageVersion: string;
+  framework: 'playwright';
+  tool: string;
+  runtime: WalletQaProofRuntimeMetadata;
+}
+
+export interface WalletQaProofRuntimeMetadata {
+  node: string;
+  platform: string;
+  arch: string;
+}
+
+export interface WalletQaProofTestMetadata {
+  project?: string;
+  title?: string;
+}
+
+export interface WalletQaProofSummary {
+  status: WalletQaProofStatus;
+  origin?: string;
+  maskedAccount?: string;
+  chainId?: number | string;
+  artifactCount: number;
+  failure?: string;
+}
+
+export interface WalletQaProofChecksums {
+  artifactSha256: string[];
 }
 
 export interface WalletQaProofManifestOptions {
@@ -141,12 +181,21 @@ export interface WalletQaProofManifestOptions {
   attachments?: WalletQaProofAttachment[];
   failure?: unknown;
   notes?: string[];
+  runId?: string;
+  createdAt?: string;
+  tool?: string;
+  test?: WalletQaProofTestMetadata;
 }
 
 export interface WalletQaProofVerificationResult {
   status: 'verified';
   artifactDir: string;
   manifestPath: string;
+  manifestSha256: string;
+  schemaVersion: 1;
+  createdAt: string;
+  runId: string;
+  provenance: WalletQaProofProvenance;
   manifest: WalletQaProofManifest;
 }
 
@@ -166,6 +215,11 @@ const DEFAULT_WALLET_CONFIG: WalletQaConfig = {
   useRealWallet: false,
   artifactDir: '.wallet-artifacts/playwright'
 };
+const PLAYWRIGHT_PACKAGE_VERSION = '0.2.3';
+
+function runtimeMetadata(): WalletQaProofRuntimeMetadata {
+  return { node: process.version, platform: process.platform, arch: process.arch };
+}
 
 export function defineWalletQaConfig(config: WalletQaPlaywrightConfig): WalletQaPlaywrightConfig {
   return defineConfig(config) as WalletQaPlaywrightConfig;
@@ -301,7 +355,7 @@ export function createWalletArtifacts(page: Page, config: WalletQaConfig, testIn
       return filePath;
     },
     async writeProofManifest(options) {
-      return writeWalletQaProofManifest({ ...options, artifactDir: runDir });
+      return writeWalletQaProofManifest({ ...options, artifactDir: runDir, test: testMetadataFromInfo(testInfo) });
     },
     async connectedProof(name, options) {
       const manifestName = `${sanitizePathPart(name)}.json`;
@@ -321,6 +375,8 @@ export function createWalletArtifacts(page: Page, config: WalletQaConfig, testIn
         status: 'connected',
         manifestName,
         artifactDir: runDir,
+        tool: 'walletArtifacts.connectedProof',
+        test: testMetadataFromInfo(testInfo),
         notes: [...(options.notes ?? []), `proof manifest: ${manifestName}`]
       });
     },
@@ -374,15 +430,38 @@ export async function writeWalletQaProofManifest(options: WalletQaProofManifestO
   await mkdir(artifactDir, { recursive: true });
 
   const artifacts = await Promise.all((options.attachments ?? []).map((attachment) => createProofArtifact(artifactDir, attachment)));
-  const manifest: WalletQaProofManifest = {
-    artifactType: 'wallet-qa-proof',
+  const maskedAccount = options.account ? maskEthereumAddress(options.account) : undefined;
+  const failure = options.failure !== undefined ? formatWalletQaFailure(options.failure) : undefined;
+  const summary: WalletQaProofSummary = {
     status: options.status,
     ...(options.origin ? { origin: assertSafeOrigin(options.origin) } : {}),
-    ...(options.account ? { maskedAccount: maskEthereumAddress(options.account) } : {}),
+    ...(maskedAccount ? { maskedAccount } : {}),
+    ...(options.chainId !== undefined ? { chainId: options.chainId } : {}),
+    artifactCount: artifacts.length,
+    ...(failure ? { failure } : {})
+  };
+  const manifest: WalletQaProofManifest = {
+    schemaVersion: 1,
+    artifactType: 'wallet-qa-proof',
+    createdAt: options.createdAt ?? new Date().toISOString(),
+    runId: options.runId ?? randomUUID(),
+    provenance: {
+      packageName: '@broccolo1d/playwright',
+      packageVersion: PLAYWRIGHT_PACKAGE_VERSION,
+      framework: 'playwright',
+      tool: sanitizeProvenanceTool(options.tool ?? 'writeWalletQaProofManifest'),
+      runtime: runtimeMetadata()
+    },
+    ...(options.test ? { test: sanitizeTestMetadata(options.test) } : {}),
+    status: options.status,
+    ...(options.origin ? { origin: assertSafeOrigin(options.origin) } : {}),
+    ...(maskedAccount ? { maskedAccount } : {}),
     ...(options.chainId !== undefined ? { chainId: options.chainId } : {}),
     artifacts,
-    ...(options.failure !== undefined ? { failure: formatWalletQaFailure(options.failure) } : {}),
-    ...(options.notes ? { notes: options.notes.map((note) => redactWalletQaValue(note)) } : {})
+    ...(failure !== undefined ? { failure } : {}),
+    ...(options.notes ? { notes: options.notes.map((note) => redactWalletQaValue(note)) } : {}),
+    summary,
+    checksums: { artifactSha256: artifacts.map((artifact) => artifact.sha256) }
   };
 
   const text = `${JSON.stringify(manifest, null, 2)}\n`;
@@ -398,6 +477,7 @@ export async function verifyWalletQaProofManifest(artifactDir: string, manifestN
   const manifestPath = join(resolvedArtifactDir, manifestName);
   const text = await readFile(manifestPath, 'utf8');
   assertPublicManifestIsSafe(text, resolvedArtifactDir);
+  const manifestSha256 = createHash('sha256').update(text).digest('hex');
   const manifest = JSON.parse(text) as WalletQaProofManifest;
   if (manifest.artifactType !== 'wallet-qa-proof') {
     throw new Error('Wallet QA proof manifest has an unexpected artifact type.');
@@ -405,13 +485,33 @@ export async function verifyWalletQaProofManifest(artifactDir: string, manifestN
   if (manifest.status !== 'connected' && manifest.status !== 'failed') {
     throw new Error('Wallet QA proof manifest has an unexpected status.');
   }
+  if (manifest.origin !== undefined) {
+    assertSafeOrigin(manifest.origin);
+  }
+  if (manifest.maskedAccount !== undefined && !isSafeMaskedAccount(manifest.maskedAccount)) {
+    throw new Error('Wallet QA proof manifest masked account must be shortened and must not contain a full wallet address.');
+  }
   if (!Array.isArray(manifest.artifacts)) {
     throw new Error('Wallet QA proof manifest artifacts must be an array.');
   }
   for (const artifact of manifest.artifacts) {
     await verifyProofArtifact(resolvedArtifactDir, artifact);
   }
-  return { status: 'verified', artifactDir: resolvedArtifactDir, manifestPath, manifest };
+  if (manifest.schemaVersion === undefined) {
+    throw new Error('Wallet QA proof manifest schemaVersion is required for verification.');
+  }
+  verifyWalletQaProofProvenance(manifest);
+  return {
+    status: 'verified',
+    artifactDir: resolvedArtifactDir,
+    manifestPath,
+    manifestSha256,
+    schemaVersion: manifest.schemaVersion,
+    createdAt: manifest.createdAt,
+    runId: manifest.runId,
+    provenance: manifest.provenance,
+    manifest
+  };
 }
 
 export function formatWalletQaFailure(error: unknown): string {
@@ -420,7 +520,7 @@ export function formatWalletQaFailure(error: unknown): string {
 }
 
 export function redactWalletQaValue(value: unknown): string {
-  return redactPaths(redactFullAddresses(typeof value === 'string' ? value : JSON.stringify(value, null, 2)));
+  return redactPaths(redactFullAddresses(redactSecrets(typeof value === 'string' ? value : JSON.stringify(value, null, 2))));
 }
 
 async function createProofArtifact(artifactDir: string, attachment: WalletQaProofAttachment): Promise<WalletQaProofArtifact> {
@@ -492,6 +592,9 @@ function assertPublicManifestIsSafe(text: string, artifactDir: string): void {
   if (containsLocalPathLeak(text)) {
     throw new Error('Wallet QA proof manifest must not contain local path leaks.');
   }
+  if (containsSecretLeak(text)) {
+    throw new Error('Wallet QA proof manifest must not contain raw secrets or tokens.');
+  }
 }
 
 function containsLocalPathLeak(text: string): boolean {
@@ -521,6 +624,15 @@ function hasLocalPath(value: string): boolean {
     || /(?:^|[\s"'`([{<])\/(?!\/)(?:[^/\s"'`)\]}>]+\/)+[^/\s"'`)\]}>]*/.test(value);
 }
 
+function containsSecretLeak(text: string): boolean {
+  return /\bnpm_[A-Za-z0-9_-]{20,}\b/.test(text)
+    || /\b0x[0-9a-fA-F]{64}\b/.test(text)
+    || /\b(?:private[_-]?key|seed(?:[ _-]?phrase)?|mnemonic|password|passphrase|secret|token|rpc(?:[_-]?url)?)\b\s*(?::|=|is|was)?\s+(?:[A-Za-z][A-Za-z0-9_-]{5,}|[0-9a-fA-F]{64}|https?:\/\/\S+)/i.test(text)
+    || /https?:\/\/[^\s"'`]*\/(?:[^\s"'`]*[A-Za-z0-9_-]{20,}[^\s"'`]*)/i.test(text)
+    || /https?:\/\/[^\s"'`]+[?&](?:api[_-]?key|token|key|auth|access[_-]?token)=[^\s"'`&]+/i.test(text)
+    || /https?:\/\/[^\s"'`]+:[^\s"'`@]+@[^\s"'`]+/i.test(text);
+}
+
 function assertSafeArtifactBasename(fileName: string, label: string): void {
   if (isAbsolute(fileName) || fileName !== basename(fileName) || fileName.includes('..') || fileName.length === 0) {
     throw new Error(`Wallet QA proof ${label} must be a safe basename.`);
@@ -530,21 +642,99 @@ function assertSafeArtifactBasename(fileName: string, label: string): void {
 function assertSafeOrigin(origin: string): string {
   try {
     const parsed = new URL(origin);
-    if ((parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.search === '' && parsed.hash === '') {
-      return origin;
+    if ((parsed.protocol === 'http:' || parsed.protocol === 'https:') && parsed.pathname === '/' && parsed.search === '' && parsed.hash === '') {
+      return parsed.origin;
     }
   } catch {
     // handled below
   }
-  throw new Error('Wallet QA proof origin must be an http(s) origin without query strings or hashes.');
+  throw new Error('Wallet QA proof origin must be an http(s) origin without nested paths, query strings, or hashes.');
 }
 
 function sanitizeLabel(value: string): string {
   return sanitizePathPart(value);
 }
 
+function testMetadataFromInfo(testInfo: TestInfo): WalletQaProofTestMetadata {
+  return sanitizeTestMetadata({
+    ...(testInfo.project?.name ? { project: testInfo.project.name } : {}),
+    ...(testInfo.title ? { title: testInfo.title } : {})
+  });
+}
+
+function sanitizeTestMetadata(metadata: WalletQaProofTestMetadata): WalletQaProofTestMetadata {
+  return {
+    ...(metadata.project ? { project: sanitizePathPart(metadata.project) } : {}),
+    ...(metadata.title ? { title: redactWalletQaValue(metadata.title) } : {})
+  };
+}
+
+function sanitizeProvenanceTool(value: string): string {
+  return value.trim().replace(/[^a-zA-Z0-9._-]+/g, '-').slice(0, 80) || 'writeWalletQaProofManifest';
+}
+
+function verifyWalletQaProofProvenance(manifest: WalletQaProofManifest): void {
+  if (manifest.schemaVersion !== 1) {
+    throw new Error('Wallet QA proof manifest schemaVersion is unsupported.');
+  }
+  if (!manifest.createdAt || Number.isNaN(Date.parse(manifest.createdAt))) {
+    throw new Error('Wallet QA proof manifest createdAt provenance is required.');
+  }
+  if (!manifest.runId || typeof manifest.runId !== 'string') {
+    throw new Error('Wallet QA proof manifest runId provenance is required.');
+  }
+  if (manifest.provenance?.packageName !== '@broccolo1d/playwright' || manifest.provenance.framework !== 'playwright' || !manifest.provenance.tool) {
+    throw new Error('Wallet QA proof manifest provenance is incomplete.');
+  }
+  if (manifest.provenance.packageVersion !== PLAYWRIGHT_PACKAGE_VERSION) {
+    throw new Error('Wallet QA proof manifest package version provenance is inconsistent.');
+  }
+  const runtime = manifest.provenance.runtime;
+  const expectedRuntime = runtimeMetadata();
+  if (!runtime || runtime.node !== expectedRuntime.node || runtime.platform !== expectedRuntime.platform || runtime.arch !== expectedRuntime.arch) {
+    throw new Error('Wallet QA proof manifest runtime provenance is inconsistent.');
+  }
+  if (manifest.status === 'connected' && (!manifest.origin || !manifest.maskedAccount || manifest.chainId === undefined || manifest.artifacts.length === 0)) {
+    throw new Error('Wallet QA connected proof manifest requires origin, masked account, chain, and at least one evidence artifact.');
+  }
+  const expectedSummary: WalletQaProofSummary = {
+    status: manifest.status,
+    ...(manifest.origin ? { origin: manifest.origin } : {}),
+    ...(manifest.maskedAccount ? { maskedAccount: manifest.maskedAccount } : {}),
+    ...(manifest.chainId !== undefined ? { chainId: manifest.chainId } : {}),
+    artifactCount: manifest.artifacts.length,
+    ...(manifest.failure ? { failure: manifest.failure } : {})
+  };
+  if (JSON.stringify(manifest.summary) !== JSON.stringify(expectedSummary)) {
+    throw new Error('Wallet QA proof manifest summary does not match verified manifest fields.');
+  }
+  const expectedChecksums = manifest.artifacts.map((artifact) => artifact.sha256);
+  if (JSON.stringify(manifest.checksums?.artifactSha256) !== JSON.stringify(expectedChecksums)) {
+    throw new Error('Wallet QA proof manifest checksums do not match verified artifacts.');
+  }
+}
+
 function redactFullAddresses(value: string): string {
   return value.replace(/0x[0-9a-fA-F]{40}/g, (address) => maskEthereumAddress(address));
+}
+
+function redactSecrets(value: string): string {
+  return value
+    .replace(/\bnpm_[A-Za-z0-9_-]{20,}\b/g, '[redacted:npm-token]')
+    .replace(/https?:\/\/[^\s"'`]+:[^\s"'`@]+@[^\s"'`]+/gi, '[redacted:rpc-url]')
+    .replace(/https?:\/\/[^\s"'`]*\/(?:[^\s"'`]*[A-Za-z0-9_-]{20,}[^\s"'`]*)/gi, '[redacted:rpc-url]')
+    .replace(/https?:\/\/[^\s"'`]+[?&](?:api[_-]?key|token|key|auth|access[_-]?token)=[^\s"'`&]+/gi, '[redacted:rpc-url]')
+    .replace(/\b(?:private[_-]?key|seed(?:[ _-]?phrase)?|mnemonic|password|passphrase|secret|token|rpc(?:[_-]?url)?)\b\s*(?::|=|is|was)?\s+[^\n\r]*/gi, (match) => redactLabeledSecret(match))
+    .replace(/\b(?:0x)?[0-9a-fA-F]{64}\b/g, '[redacted:secret]');
+}
+
+function redactLabeledSecret(value: string): string {
+  const label = value.match(/private[_-]?key|seed(?:[ _-]?phrase)?|mnemonic|password|passphrase|secret|token|rpc(?:[_-]?url)?/i)?.[0] ?? 'secret';
+  return `[redacted:${label.toLowerCase().replace(/[ _]/g, '-')}]`;
+}
+
+function isSafeMaskedAccount(value: string): boolean {
+  return /^0x[0-9a-fA-F]{4}(?:…|\.\.\.)[0-9a-fA-F]{4,5}$/.test(value) && !/0x[0-9a-fA-F]{40}/.test(value);
 }
 
 function redactPaths(value: string): string {

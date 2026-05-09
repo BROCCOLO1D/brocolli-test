@@ -4,8 +4,8 @@
 
 The product line is now public package oriented:
 
-- `@broccolo1d/wallet-browser@0.2.2` — core browser-wallet runtime, guardrails, CLI, and artifact helpers.
-- `@broccolo1d/playwright@0.2.2` — Playwright fixtures for downstream dapp QA suites.
+- `@broccolo1d/wallet-browser@0.2.3` — core browser-wallet runtime, guardrails, CLI, and artifact helpers.
+- `@broccolo1d/playwright@0.2.3` — Playwright fixtures for downstream dapp QA suites.
 
 Target-specific scripts are not the product. Downstream apps own selectors, routes, modal behavior, assertions, and test data. These packages own wallet runtime primitives, policy boundaries, and verification contracts.
 
@@ -35,8 +35,8 @@ The harness should make those answers repeatable for humans, CI, and agents with
 ### Importable packages
 
 ```bash
-pnpm add -D @broccolo1d/playwright@0.2.2 @playwright/test
-pnpm add -D @broccolo1d/wallet-browser@0.2.2 playwright
+pnpm add -D @broccolo1d/playwright@0.2.3 @playwright/test
+pnpm add -D @broccolo1d/wallet-browser@0.2.3 playwright
 ```
 
 ### Playwright fixture layer
@@ -119,8 +119,11 @@ The artifact contract is local-first:
 - manifest metadata for scenario, status, masked account, chain, origin, decisions, and attachments;
 - screenshots captured as local diagnostics;
 - attachment basenames, sha256 hashes, and sizes;
+- schema v1 public proof manifests with `createdAt`, `runId`, package/framework/tool provenance, optional test metadata, summary fields, artifact checksum lists, and verifier-computed `manifestSha256`;
 - verifier output usable in CI without relaunching a browser;
 - rejection of full addresses and absolute local paths in public proof manifests.
+
+Milestone 3 proof artifact upgrade is implemented in `0.2.3`: Playwright proof manifests now emit required schema/provenance fields and verifier-friendly summaries/checksums, verifiers return manifest digests and provenance, fixture proof verification validates schema v1 provenance, and downgraded manifests without `schemaVersion` are rejected.
 
 ## Product milestones
 

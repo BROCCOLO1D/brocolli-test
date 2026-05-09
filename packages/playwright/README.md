@@ -7,7 +7,7 @@ This package is for consumer app repos. The app owns routes, selectors, wallet m
 ## Install
 
 ```bash
-pnpm add -D @broccolo1d/playwright@0.2.2 @playwright/test
+pnpm add -D @broccolo1d/playwright@0.2.3 @playwright/test
 ```
 
 ESM-only. Node.js `>=22 <23`.
@@ -96,7 +96,9 @@ test('connects through wallet policy', async ({ page, wallet, walletArtifacts })
 });
 ```
 
-The proof manifest stores public-oriented metadata: attachment basenames, sha256 hashes, sizes, masked account, safe origin, chain ID, and redacted failure text. It intentionally does not store full local paths or full wallet addresses.
+The proof manifest stores public-oriented metadata: `schemaVersion: 1`, `createdAt`, `runId`, package/framework/tool provenance, optional Playwright project/title metadata, attachment basenames, sha256 hashes, sizes, masked account, safe origin, chain ID, redacted failure text, verifier-friendly `summary`, and artifact checksum lists. It intentionally does not store full local paths, full wallet addresses, raw query/hash origins, or raw secrets.
+
+`verifyWalletQaProofManifest()` returns the parsed manifest plus verifier-side provenance (`schemaVersion`, `createdAt`, `runId`, `provenance`) and a `manifestSha256` digest computed from the manifest file. The digest is intentionally returned by the verifier instead of embedded in the manifest to avoid self-hashing ambiguity. Manifests must include schema v1 provenance; downgraded manifests without `schemaVersion` are rejected.
 
 ## Fixture surface
 
@@ -110,8 +112,8 @@ The proof manifest stores public-oriented metadata: attachment basenames, sha256
 
 - `defineWalletQaConfig(config)`: typed Playwright config wrapper for wallet QA fixtures.
 - `createFailClosedWalletPromptDriver(options)`: wraps explicit prompt automation and rejects missing handlers, missing/wrong origin, wrong account, or wrong chain.
-- `writeWalletQaProofManifest(options)`: writes a public proof manifest with safe attachment metadata and redacted failures.
-- `verifyWalletQaProofManifest(artifactDir)`: verifies manifest shape, attachment hashes/sizes, and rejects full addresses or local path leaks.
+- `writeWalletQaProofManifest(options)`: writes a public schema v1 proof manifest with safe attachment metadata, provenance, summaries, checksums, and redacted failures.
+- `verifyWalletQaProofManifest(artifactDir)`: verifies manifest shape, required schema v1 provenance, summary/checksum consistency, attachment hashes/sizes, and rejects full addresses, raw secrets/RPC tokens, local path leaks, and downgraded manifests without `schemaVersion`.
 - `formatWalletQaFailure(error)` / `redactWalletQaValue(value)`: produce doc-safe failure snippets by masking wallet addresses and local paths.
 
 ## Failure proof
