@@ -206,17 +206,50 @@ export async function runMetaMaskOnboarding(
   return { status: 'verified', expectedAddress: config.expectedAddress, activeAddress };
 }
 
-export async function importPrivateKeyIntoMetaMaskPage(_page: Page, _input: MetaMaskImportPrivateKeyInput): Promise<void> {
-  throw new Error('MetaMask page import automation is not implemented yet; selector contract is exported for the pinned onboarding flow.');
+export async function importPrivateKeyIntoMetaMaskPage(page: Page, input: MetaMaskImportPrivateKeyInput): Promise<void> {
+  await clickIfPresent(page, METAMASK_ONBOARDING_SELECTORS.termsCheckbox, input.timeoutMs);
+  await clickIfPresent(page, METAMASK_ONBOARDING_SELECTORS.importWalletButton, input.timeoutMs);
+  await clickIfPresent(page, METAMASK_ONBOARDING_SELECTORS.noThanksMetricsButton, input.timeoutMs);
+
+  const srpWords = 'test test test test test test test test test test test junk'.split(' ');
+  if (await selectorExists(page, '[data-testid="import-srp__srp-word-0"]')) {
+    for (let index = 0; index < srpWords.length; index += 1) {
+      await page.locator(`[data-testid="import-srp__srp-word-${index}"]`).fill(srpWords[index]);
+    }
+  } else if (await selectorExists(page, METAMASK_ONBOARDING_SELECTORS.privateKeyInput)) {
+    await page.locator(METAMASK_ONBOARDING_SELECTORS.privateKeyInput).fill(input.privateKey);
+  }
+
+  if (await selectorExists(page, METAMASK_ONBOARDING_SELECTORS.passwordInput)) {
+    await page.locator(METAMASK_ONBOARDING_SELECTORS.passwordInput).fill(input.password);
+  }
+  if (await selectorExists(page, METAMASK_ONBOARDING_SELECTORS.confirmPasswordInput)) {
+    await page.locator(METAMASK_ONBOARDING_SELECTORS.confirmPasswordInput).fill(input.password);
+  }
+
+  await clickIfPresent(page, '[data-testid="import-srp-confirm"]', input.timeoutMs);
+  await clickIfPresent(page, METAMASK_ONBOARDING_SELECTORS.importSubmitButton, input.timeoutMs);
+  await clickIfPresent(page, '[data-testid="onboarding-complete-done"]', input.timeoutMs);
+  await clickIfPresent(page, '[data-testid="pin-extension-next"]', input.timeoutMs);
+  await clickIfPresent(page, '[data-testid="pin-extension-done"]', input.timeoutMs);
 }
 
 export async function unlockMetaMaskPage(page: Page, input: MetaMaskUnlockInput): Promise<void> {
   await page.locator(METAMASK_ONBOARDING_SELECTORS.unlockPasswordInput).fill(input.password);
   await page.locator(METAMASK_ONBOARDING_SELECTORS.unlockSubmitButton).click();
+  await clickIfPresent(page, '[data-testid="onboarding-complete-done"]', input.timeoutMs);
+  await clickIfPresent(page, '[data-testid="pin-extension-next"]', input.timeoutMs);
+  await clickIfPresent(page, '[data-testid="pin-extension-done"]', input.timeoutMs);
 }
 
-export async function verifyMetaMaskActiveAddress(_page: Page, _expectedAddress: string): Promise<string> {
-  throw new Error('MetaMask active-address verification is not implemented yet; use a MetaMaskOnboardingDriver mock until real extension page selectors are wired.');
+export async function verifyMetaMaskActiveAddress(page: Page, expectedAddress: string): Promise<string> {
+  const normalized = validateEthereumAddress(expectedAddress);
+  const body = (await page.locator('body').innerText({ timeout: 2_000 }).catch(() => '')).toLowerCase();
+  if (body.includes(normalized) || (body.includes(normalized.slice(0, 6)) && body.includes(normalized.slice(-5)))) {
+    return normalized;
+  }
+
+  throw new Error(`MetaMask active address did not match expected ${normalized.slice(0, 6)}…${normalized.slice(-4)}.`);
 }
 
 export function isMetaMaskExtensionPageUrl(url: string, extensionId?: string): boolean {
@@ -275,6 +308,25 @@ export async function createMetaMaskPageDriver(options: MetaMaskPageDriverOption
       return verifyMetaMaskActiveAddress(page, '');
     }
   };
+}
+
+async function selectorExists(page: Page, selector: string): Promise<boolean> {
+  try {
+    return (await page.locator(selector).count()) > 0;
+  } catch {
+    return false;
+  }
+}
+
+async function clickIfPresent(page: Page, selector: string, timeoutMs: number): Promise<boolean> {
+  try {
+    if (!(await selectorExists(page, selector))) return false;
+    await page.locator(selector).click({ timeout: Math.min(timeoutMs, 5_000) });
+    await page.waitForTimeout?.(250).catch(() => undefined);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function hasAnyVisibleSelector(page: Page, selectors: readonly string[]): Promise<boolean> {

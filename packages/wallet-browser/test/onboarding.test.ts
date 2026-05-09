@@ -11,7 +11,9 @@ import {
   validateEthereumAddress,
   validateMetaMaskPassword,
   validatePrivateKey,
+  importPrivateKeyIntoMetaMaskPage,
   unlockMetaMaskPage,
+  verifyMetaMaskActiveAddress,
   type MetaMaskOnboardingDriver
 } from '../src/index.js';
 
@@ -126,6 +128,79 @@ describe('MetaMask extension page discovery', () => {
       `fill:${METAMASK_ONBOARDING_SELECTORS.unlockPasswordInput}:${PASSWORD}`,
       `click:${METAMASK_ONBOARDING_SELECTORS.unlockSubmitButton}`
     ]);
+  });
+
+
+
+  it('imports a MetaMask wallet through current onboarding selectors without exposing secrets', async () => {
+    const calls: string[] = [];
+    const visible = new Set<string>([
+      METAMASK_ONBOARDING_SELECTORS.termsCheckbox,
+      METAMASK_ONBOARDING_SELECTORS.importWalletButton,
+      METAMASK_ONBOARDING_SELECTORS.noThanksMetricsButton,
+      '[data-testid="import-srp__srp-word-0"]',
+      '[data-testid="import-srp__srp-word-1"]',
+      '[data-testid="import-srp__srp-word-2"]',
+      '[data-testid="import-srp__srp-word-3"]',
+      '[data-testid="import-srp__srp-word-4"]',
+      '[data-testid="import-srp__srp-word-5"]',
+      '[data-testid="import-srp__srp-word-6"]',
+      '[data-testid="import-srp__srp-word-7"]',
+      '[data-testid="import-srp__srp-word-8"]',
+      '[data-testid="import-srp__srp-word-9"]',
+      '[data-testid="import-srp__srp-word-10"]',
+      '[data-testid="import-srp__srp-word-11"]',
+      METAMASK_ONBOARDING_SELECTORS.passwordInput,
+      METAMASK_ONBOARDING_SELECTORS.confirmPasswordInput,
+      '[data-testid="import-srp-confirm"]',
+      '[data-testid="onboarding-complete-done"]',
+      '[data-testid="pin-extension-next"]',
+      '[data-testid="pin-extension-done"]'
+    ]);
+    const page = {
+      locator(selector: string) {
+        return {
+          first() { return this; },
+          async count() { return visible.has(selector) ? 1 : 0; },
+          async fill(value: string) { calls.push(`fill:${selector}:${value}`); },
+          async click() { calls.push(`click:${selector}`); },
+          async isVisible() { return visible.has(selector); },
+          async innerText() { return 'Your wallet is ready'; }
+        };
+      },
+      getByText() {
+        return { first() { return this; }, async click() { calls.push('click:text'); } };
+      },
+      async waitForTimeout() {}
+    } as never;
+
+    await importPrivateKeyIntoMetaMaskPage(page, {
+      expectedAddress: ADDRESS,
+      privateKey: PRIVATE_KEY,
+      password: PASSWORD,
+      timeoutMs: 42
+    });
+
+    expect(calls).toContain(`click:${METAMASK_ONBOARDING_SELECTORS.termsCheckbox}`);
+    expect(calls).toContain(`click:${METAMASK_ONBOARDING_SELECTORS.importWalletButton}`);
+    expect(calls).toContain(`click:${METAMASK_ONBOARDING_SELECTORS.noThanksMetricsButton}`);
+    expect(calls).toContain(`fill:${METAMASK_ONBOARDING_SELECTORS.passwordInput}:${PASSWORD}`);
+    expect(calls).toContain(`fill:${METAMASK_ONBOARDING_SELECTORS.confirmPasswordInput}:${PASSWORD}`);
+    expect(calls.join('\n')).not.toContain(PRIVATE_KEY);
+  });
+
+  it('verifies active MetaMask addresses from full or shortened page text', async () => {
+    const page = {
+      locator(selector: string) {
+        return {
+          async innerText() {
+            return selector === 'body' ? `OWNER\n${ADDRESS.slice(0, 6)}...${ADDRESS.slice(-5)}\nEthereum Mainnet` : '';
+          }
+        };
+      }
+    } as never;
+
+    await expect(verifyMetaMaskActiveAddress(page, ADDRESS)).resolves.toBe(ADDRESS);
   });
 
   it('creates a page-backed driver that can classify known MetaMask UI states', async () => {
