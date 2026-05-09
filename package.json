@@ -11,9 +11,9 @@
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
-    "wallet:smoke:metamask": "pnpm --filter @brocolli-test/wallet-browser build && node packages/wallet-browser/dist/cli.js smoke-metamask",
-    "wallet:smoke:fixture-extension": "pnpm --filter @brocolli-test/wallet-browser build && node packages/wallet-browser/dist/cli.js smoke-fixture-extension",
-    "wallet:smoke:verify": "pnpm --filter @brocolli-test/wallet-browser build && node packages/wallet-browser/dist/cli.js verify-smoke-artifacts",
+    "wallet:smoke:metamask": "pnpm --filter @broccolo1d/wallet-browser build && node packages/wallet-browser/dist/cli.js smoke-metamask",
+    "wallet:smoke:fixture-extension": "pnpm --filter @broccolo1d/wallet-browser build && node packages/wallet-browser/dist/cli.js smoke-fixture-extension",
+    "wallet:smoke:verify": "pnpm --filter @broccolo1d/wallet-browser build && node packages/wallet-browser/dist/cli.js verify-smoke-artifacts",
     "wallet:metamask:fetch": "python3 scripts/fetch-metamask-extension.py",
     "security:scan": "python3 scripts/sensitive-scan.py"
   },

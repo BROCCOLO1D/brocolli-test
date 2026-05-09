@@ -1,12 +1,12 @@
 {
-  "name": "@brocolli-test/wallet-browser",
-  "version": "0.0.0",
+  "name": "@broccolo1d/wallet-browser",
+  "version": "0.1.0",
   "private": false,
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "bin": {
-    "wallet-browser": "./dist/cli.js"
+    "wallet-browser": "dist/cli.js"
   },
   "exports": {
     ".": {
@@ -28,5 +28,8 @@
   "dependencies": {
     "playwright": "1.59.1"
   },
-  "devDependencies": {}
+  "devDependencies": {},
+  "publishConfig": {
+    "access": "public"
+  }
 }

@@ -43,8 +43,8 @@ This repo is building a safer middle layer: real browser, real wallet extension,
 Working today:
 
 - TypeScript/pnpm workspace with importable packages only.
-- `@brocolli-test/playwright` fixtures for downstream app QA suites.
-- `@brocolli-test/wallet-browser` core config, network, prompt, guardrail, proof, and MetaMask helpers.
+- `@broccolo1d/playwright` fixtures for downstream app QA suites.
+- `@broccolo1d/wallet-browser` core config, network, prompt, guardrail, proof, and MetaMask helpers.
 - MetaMask extension fetcher for ignored local extension artifacts.
 - Persistent Chromium + MetaMask smoke utilities.
 - Redacted proof verification for connection artifacts.
@@ -53,7 +53,7 @@ Working today:
 Downstream fixture apps now live outside this repo:
 
 - `BROCCOLO1D/broccoli-control` is the official public local fixture dapp.
-- The local `BROCCOLO1D/wildcat-app-v2` fork imports `@brocolli-test/playwright` for app-owned wallet QA specs.
+- The local `BROCCOLO1D/wildcat-app-v2` fork imports `@broccolo1d/playwright` for app-owned wallet QA specs.
 
 Local dogfood already proved:
 
@@ -65,7 +65,7 @@ Local dogfood already proved:
 ## Repository layout
 
 ```text
-packages/playwright/                # Importable @brocolli-test/playwright fixtures for app QA suites
+packages/playwright/                # Importable @broccolo1d/playwright fixtures for app QA suites
 packages/wallet-browser/           # Core config, network, prompt, guardrail, proof helpers
 scripts/fetch-metamask-extension.py # Local-only MetaMask extension fetch utility
 scripts/sensitive-scan.py          # Public-repo secret/sensitive-content scan
@@ -108,8 +108,8 @@ pnpm wallet:metamask:fetch
 Run non-secret smoke/config commands:
 
 ```bash
-pnpm --filter @brocolli-test/wallet-browser cli --help
-pnpm --filter @brocolli-test/wallet-browser cli prepare
+pnpm --filter @broccolo1d/wallet-browser cli --help
+pnpm --filter @broccolo1d/wallet-browser cli prepare
 pnpm wallet:smoke:metamask
 pnpm wallet:smoke:fixture-extension
 ```
@@ -122,13 +122,15 @@ xvfb-run -a pnpm wallet:smoke:metamask
 
 ## Importable Playwright package
 
+The green panel below is a generated docs card for the package import shape and verified test output. It is not the Broccoli Control dapp UI.
+
 ![brocolli-test import usage and verified output](docs/assets/readme/playwright-package-output.png)
 
 App QA suites can import the fixture foundation instead of shelling out to repo scripts:
 
 ```ts
 // tests/wallet.spec.ts
-import { expect, test } from '@brocolli-test/playwright';
+import { expect, test } from '@broccolo1d/playwright';
 
 test('connects with an explicit wallet policy', async ({ page, wallet, walletArtifacts }) => {
   await page.goto('http://127.0.0.1:5173');
@@ -147,7 +149,7 @@ Real MetaMask launch is opt-in via `walletConfig.useRealWallet`; without explici
 
 ```ts
 // playwright.config.ts
-import { defineWalletQaConfig } from '@brocolli-test/playwright';
+import { defineWalletQaConfig } from '@broccolo1d/playwright';
 
 export default defineWalletQaConfig({
   use: {
