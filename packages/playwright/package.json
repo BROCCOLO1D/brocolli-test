@@ -1,6 +1,6 @@
 {
-  "name": "@brocolli-test/playwright",
-  "version": "0.0.0",
+  "name": "@broccolo1d/playwright",
+  "version": "0.1.0",
   "private": false,
   "type": "module",
   "main": "./dist/index.js",
@@ -17,19 +17,22 @@
     "package.json"
   ],
   "scripts": {
-    "build": "pnpm --filter @brocolli-test/wallet-browser build && tsc -p tsconfig.json",
-    "test": "pnpm --filter @brocolli-test/wallet-browser build && vitest run",
-    "typecheck": "pnpm --filter @brocolli-test/wallet-browser build && tsc -p tsconfig.json --noEmit"
+    "build": "pnpm --filter @broccolo1d/wallet-browser build && tsc -p tsconfig.json",
+    "test": "pnpm --filter @broccolo1d/wallet-browser build && vitest run",
+    "typecheck": "pnpm --filter @broccolo1d/wallet-browser build && tsc -p tsconfig.json --noEmit"
   },
   "peerDependencies": {
     "@playwright/test": "^1.59.1"
   },
   "dependencies": {
-    "@brocolli-test/wallet-browser": "workspace:*"
+    "@broccolo1d/wallet-browser": "workspace:*"
   },
   "devDependencies": {
     "@playwright/test": "1.59.1",
     "@types/node": "25.6.0",
     "vitest": "4.1.5"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

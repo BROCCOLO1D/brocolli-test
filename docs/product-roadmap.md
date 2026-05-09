@@ -28,7 +28,7 @@ The harness should make those answers repeatable for humans, CI, and agents.
 ### Importable Playwright package
 
 ```ts
-import { test, expect } from '@brocolli-test/playwright';
+import { test, expect } from '@broccolo1d/playwright';
 
 test('connects app-owned wallet flow', async ({ page, wallet }) => {
   await page.goto('/');
@@ -70,8 +70,8 @@ Keep the public product centered on packages that downstream apps import, not ta
 
 Required pieces:
 
-- `@brocolli-test/playwright` fixtures for app-owned specs;
-- `@brocolli-test/wallet-browser` core wallet runtime helpers;
+- `@broccolo1d/playwright` fixtures for app-owned specs;
+- `@broccolo1d/wallet-browser` core wallet runtime helpers;
 - wallet config: extension path/version, profile mode, burner account, network;
 - policy config: allowed prompt types, chains, accounts, value caps, contracts, typed-data domains;
 - artifact writer: manifest, screenshot registry, redacted logs;
@@ -182,7 +182,7 @@ Agents should not receive raw secrets, full profiles, or unverified screenshot c
 
 ## Immediate progression steps
 
-1. **Publish package-ready builds.** Move from local tarballs to npm packages after the scope/account is ready, publishing `@brocolli-test/wallet-browser` before `@brocolli-test/playwright`.
+1. **Publish package-ready builds.** Move from local tarballs to npm packages after the scope/account is ready, publishing `@broccolo1d/wallet-browser` before `@broccolo1d/playwright`.
 2. **Harden app-owned fixtures.** Expand `broccoli-control` tests for connect, wrong-chain, wrong-account, signature, and capped ERC20 transfer cases.
 3. **Generalize policy helpers.** Keep reusable origin/chain/account/value checks in package APIs while selectors and dapp assertions stay in consumer repos.
 4. **Unify proof manifests.** Provide a generic `WALLET-QA-MANIFEST.json` writer/verifier that downstream apps can call from their own Playwright tests.

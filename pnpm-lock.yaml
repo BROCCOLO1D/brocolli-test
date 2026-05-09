@@ -23,7 +23,7 @@ importers:
 
   packages/playwright:
     dependencies:
-      '@brocolli-test/wallet-browser':
+      '@broccolo1d/wallet-browser':
         specifier: workspace:*
         version: link:../wallet-browser
     devDependencies:

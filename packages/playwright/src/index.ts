@@ -17,7 +17,7 @@ import {
   type WalletDappPageDriverSelectors,
   type WalletGuardrailConfig,
   type WalletPromptDriver
-} from '@brocolli-test/wallet-browser';
+} from '@broccolo1d/wallet-browser';
 
 export { expect };
 export type { BrowserContext, Page } from '@playwright/test';
@@ -30,7 +30,7 @@ export type {
   WalletDappPageDriverSelectors,
   WalletGuardrailConfig,
   WalletPromptDriver
-} from '@brocolli-test/wallet-browser';
+} from '@broccolo1d/wallet-browser';
 
 export interface WalletQaConfig {
   /** Launch a persistent Chromium profile with MetaMask. Default is false to avoid wallet side effects. */
@@ -43,7 +43,7 @@ export interface WalletQaConfig {
   expectedChainId?: string | number;
   /** Expected dapp origin used by wallet.connect when not supplied per-call. */
   origin?: string;
-  /** Browser/extension/profile options passed to @brocolli-test/wallet-browser when useRealWallet is true. */
+  /** Browser/extension/profile options passed to @broccolo1d/wallet-browser when useRealWallet is true. */
   browser?: Parameters<typeof launchWalletBrowser>[0];
   /** Dapp selectors used to build a simple page driver. */
   dappSelectors?: WalletDappPageDriverSelectors;
