@@ -1,7 +1,7 @@
 {
-  "name": "@agent-browser-wallet/wallet-browser",
+  "name": "@brocolli-test/wallet-browser",
   "version": "0.0.0",
-  "private": true,
+  "private": false,
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -15,6 +15,10 @@
     },
     "./package.json": "./package.json"
   },
+  "files": [
+    "dist/",
+    "package.json"
+  ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "test": "vitest run",

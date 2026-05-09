@@ -1,8 +1,8 @@
-# Agent Browser Wallet
+# brocolli-test
 
 Web3 QA automation for real browser-wallet flows.
 
-Agent Browser Wallet is a Playwright/Chromium harness for testing dapps through a real wallet extension instead of a mocked provider. It launches Chromium with MetaMask, prepares an isolated burner wallet profile, drives dapp UI, handles wallet prompts through fail-closed guardrails, and writes redacted proof artifacts that can be verified after a run.
+brocolli-test is an importable Playwright wallet QA foundation for testing dapps through a real wallet extension instead of a mocked provider. It layers reusable Playwright fixtures over the lower-level wallet-browser helpers, keeps wallet side effects opt-in, drives dapp UI, handles wallet prompts through fail-closed guardrails, and writes redacted proof artifacts that can be verified after a run.
 
 The project focus is now narrow and product-oriented:
 
@@ -35,40 +35,41 @@ This repo is building a safer middle layer: real browser, real wallet extension,
 4. **Proof artifacts**  
    Runs produce local-only screenshots, manifests, hashes, and redacted diagnostics. Verifiers reject wrong chains, wrong origins, missing screenshots, path leaks, and full-address leaks.
 
-5. **Agent-ready interface**  
-   The long-term shape is a CLI/library that agents and CI jobs can call without hand-scripting MetaMask each time.
+5. **App-owned interface**  
+   Dapp teams import the Playwright fixtures in their own tests; repo scripts stay limited to local utilities such as fetching MetaMask and running safety checks.
 
 ## Current status
 
 Working today:
 
-- TypeScript/pnpm workspace with fixture dapp and wallet-browser package.
+- TypeScript/pnpm workspace with importable packages only.
+- `@brocolli-test/playwright` fixtures for downstream app QA suites.
+- `@brocolli-test/wallet-browser` core config, network, prompt, guardrail, proof, and MetaMask helpers.
 - MetaMask extension fetcher for ignored local extension artifacts.
-- Persistent Chromium + MetaMask smoke commands.
-- Wallet config, onboarding, network, prompt, guardrail, and proof-verifier modules.
-- Fixture dapp with mocked-provider tests for connect, signing, zero-value transaction, account/chain events, and guardrail failures.
-- Local live runner for fixture dapp connection through real Chromium + MetaMask.
-- Local live runner for Wildcat testnet lender connection through real Chromium + MetaMask.
-- Redacted proof verification for fixture and Wildcat connection artifacts.
+- Persistent Chromium + MetaMask smoke utilities.
+- Redacted proof verification for connection artifacts.
 - Sensitive-content scan for tracked files and git history patches.
+
+Downstream fixture apps now live outside this repo:
+
+- `BROCCOLO1D/broccoli-control` is the official public local fixture dapp.
+- The local `BROCCOLO1D/wildcat-app-v2` fork imports `@brocolli-test/playwright` for app-owned wallet QA specs.
 
 Local dogfood already proved:
 
 - Chromium can load real MetaMask under Xvfb.
 - A Sepolia burner wallet can be imported from ignored `.env`.
-- The fixture dapp can connect to MetaMask on Sepolia and produce verified proof.
-- `https://testnet.wildcat.finance/lender` can connect to MetaMask on Sepolia and produce verified proof.
-- The Wildcat flow stops before terms signing, message signing, or transactions.
+- A fixture dapp can connect to MetaMask on Sepolia and produce verified proof.
+- Downstream apps can import the package from local tarballs while npm publishing is being prepared.
 
 ## Repository layout
 
 ```text
-apps/fixture-dapp/                 # Minimal dapp used for deterministic QA flows
+packages/playwright/                # Importable @brocolli-test/playwright fixtures for app QA suites
 packages/wallet-browser/           # Core config, network, prompt, guardrail, proof helpers
-scripts/live-fixture-connect.mjs   # Local real-wallet fixture connection runner
-scripts/live-wildcat-connect.mjs   # Local real-wallet Wildcat connection runner
-scripts/fetch-metamask-extension.py
-scripts/sensitive-scan.py
+scripts/fetch-metamask-extension.py # Local-only MetaMask extension fetch utility
+scripts/sensitive-scan.py          # Public-repo secret/sensitive-content scan
+docs/assets/readme/                # Reviewed README screenshots
 docs/product-roadmap.md            # Product direction and buildout plan
 docs/security-and-artifacts.md     # Safety policy for secrets, profiles, traces, screenshots
 ```
@@ -107,8 +108,8 @@ pnpm wallet:metamask:fetch
 Run non-secret smoke/config commands:
 
 ```bash
-pnpm --filter @agent-browser-wallet/wallet-browser cli --help
-pnpm --filter @agent-browser-wallet/wallet-browser cli prepare
+pnpm --filter @brocolli-test/wallet-browser cli --help
+pnpm --filter @brocolli-test/wallet-browser cli prepare
 pnpm wallet:smoke:metamask
 pnpm wallet:smoke:fixture-extension
 ```
@@ -117,6 +118,45 @@ On Linux/WSL/CI without a display, wrap real browser commands with Xvfb:
 
 ```bash
 xvfb-run -a pnpm wallet:smoke:metamask
+```
+
+## Importable Playwright package
+
+![brocolli-test import usage and verified output](docs/assets/readme/playwright-package-output.png)
+
+App QA suites can import the fixture foundation instead of shelling out to repo scripts:
+
+```ts
+// tests/wallet.spec.ts
+import { expect, test } from '@brocolli-test/playwright';
+
+test('connects with an explicit wallet policy', async ({ page, wallet, walletArtifacts }) => {
+  await page.goto('http://127.0.0.1:5173');
+  await wallet.connect({
+    requestConnection: async () => page.getByRole('button', { name: /connect/i }).click(),
+    expectedAccount: '0x0000000000000000000000000000000000000000',
+    expectedChainId: 11155111,
+    origin: 'http://127.0.0.1:5173'
+  });
+  await walletArtifacts.screenshot('connected');
+  expect(wallet.maskAddress('0x0000000000000000000000000000000000000000')).toContain('…');
+});
+```
+
+Real MetaMask launch is opt-in via `walletConfig.useRealWallet`; without explicit prompt/network drivers, wallet actions fail closed rather than pretending approval succeeded.
+
+```ts
+// playwright.config.ts
+import { defineWalletQaConfig } from '@brocolli-test/playwright';
+
+export default defineWalletQaConfig({
+  use: {
+    walletConfig: {
+      useRealWallet: false,
+      artifactDir: '.wallet-artifacts/playwright'
+    }
+  }
+});
 ```
 
 ## Local live QA runs
@@ -130,27 +170,15 @@ chmod 600 .env
 
 Fill only burner/testnet values. Never use production wallets.
 
-Run the fixture dapp live connection proof:
+Run fixture-app QA from a downstream app that imports this package. The official fixture app is `BROCCOLO1D/broccoli-control`:
 
 ```bash
-pnpm fixture:build
-pnpm fixture:serve
-# in another shell:
-xvfb-run -a pnpm wallet:live:fixture-connect
+cd ../broccoli-control
+npm run dev
+npm run test:wallet
 ```
 
-Run the Wildcat testnet lender live connection proof:
-
-```bash
-xvfb-run -a pnpm wallet:live:wildcat-connect
-```
-
-Verify generated proof artifacts:
-
-```bash
-node packages/wallet-browser/dist/cli.js verify-fixture-proof .wallet-artifacts/fixture-connect/<run-id>
-node packages/wallet-browser/dist/cli.js verify-wildcat-lender-artifacts .wallet-artifacts/wildcat-lender/<run-id>
-```
+For real wallet flows, use ignored burner/testnet config and keep screenshots, traces, wallet profiles, and manifests local unless they have been reviewed and scrubbed for public docs.
 
 ## Safety posture
 
@@ -164,14 +192,7 @@ node packages/wallet-browser/dist/cli.js verify-wildcat-lender-artifacts .wallet
 
 ## Product buildout path
 
-See [docs/product-roadmap.md](docs/product-roadmap.md) for the focused progression. The next milestone is to turn the proven live runners into a reusable QA scenario engine:
-
-```bash
-pnpm wallet qa connect --target fixture --policy policies/connect-only.json
-pnpm wallet qa connect --url https://testnet.wildcat.finance/lender --policy policies/wildcat-connect-only.json
-```
-
-That scenario engine should become the base for dapp QA suites, CI smoke tests, and eventually guarded signature/transaction workflows.
+See [docs/product-roadmap.md](docs/product-roadmap.md) for the focused progression. The next milestone is to publish the packages and keep expanding reusable wallet QA fixtures consumed by `broccoli-control`, the Wildcat fork, and future app-owned dapp QA suites.
 
 ## Docs
 

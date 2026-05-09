@@ -1,5 +1,5 @@
 {
-  "name": "agent-browser-wallet",
+  "name": "brocolli-test",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -11,17 +11,11 @@
     "build": "pnpm -r build",
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
-    "wallet:smoke:metamask": "pnpm --filter @agent-browser-wallet/fixture-dapp build && pnpm --filter @agent-browser-wallet/wallet-browser build && node packages/wallet-browser/dist/cli.js smoke-metamask",
-    "wallet:smoke:fixture-extension": "pnpm --filter @agent-browser-wallet/wallet-browser build && node packages/wallet-browser/dist/cli.js smoke-fixture-extension",
-    "wallet:smoke:verify": "pnpm --filter @agent-browser-wallet/wallet-browser build && node packages/wallet-browser/dist/cli.js verify-smoke-artifacts",
+    "wallet:smoke:metamask": "pnpm --filter @brocolli-test/wallet-browser build && node packages/wallet-browser/dist/cli.js smoke-metamask",
+    "wallet:smoke:fixture-extension": "pnpm --filter @brocolli-test/wallet-browser build && node packages/wallet-browser/dist/cli.js smoke-fixture-extension",
+    "wallet:smoke:verify": "pnpm --filter @brocolli-test/wallet-browser build && node packages/wallet-browser/dist/cli.js verify-smoke-artifacts",
     "wallet:metamask:fetch": "python3 scripts/fetch-metamask-extension.py",
-    "security:scan": "python3 scripts/sensitive-scan.py",
-    "fixture:build": "pnpm --filter @agent-browser-wallet/fixture-dapp build",
-    "fixture:test": "pnpm --filter @agent-browser-wallet/fixture-dapp test",
-    "fixture:test:mocked-provider": "pnpm --filter @agent-browser-wallet/fixture-dapp test:mocked-provider",
-    "fixture:serve": "pnpm --filter @agent-browser-wallet/fixture-dapp serve",
-    "wallet:live:fixture-connect": "node scripts/live-fixture-connect.mjs",
-    "wallet:live:wildcat-connect": "node scripts/live-wildcat-connect.mjs"
+    "security:scan": "python3 scripts/sensitive-scan.py"
   },
   "devDependencies": {
     "@playwright/test": "1.59.1",

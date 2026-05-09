@@ -145,9 +145,9 @@ async function openBrowserSmokePage(context: BrowserContext, cwd: string): Promi
   }
 
   await page.setContent(`<!doctype html>
-<title>Agent Browser Wallet MetaMask Smoke</title>
+<title>brocolli-test MetaMask Smoke</title>
 <main style="font-family: system-ui, sans-serif; padding: 2rem; max-width: 52rem;">
-  <h1>Agent Browser Wallet MetaMask smoke</h1>
+  <h1>brocolli-test MetaMask smoke</h1>
   <p>Chromium launched with an unpacked MetaMask extension in a persistent context.</p>
   <p>This milestone does not import, unlock, connect, sign, or transact.</p>
 </main>`);

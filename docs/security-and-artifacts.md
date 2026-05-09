@@ -1,6 +1,6 @@
 # Security and artifact handling
 
-Agent Browser Wallet drives real wallet software. Even on testnets, browser profiles and artifacts can contain private key material, sessions, RPC credentials, prompt text, local paths, and screenshots. Treat every wallet-enabled run as sensitive by default.
+brocolli-test drives real wallet software. Even on testnets, browser profiles and artifacts can contain private key material, sessions, RPC credentials, prompt text, local paths, and screenshots. Treat every wallet-enabled run as sensitive by default.
 
 ## Data classification
 

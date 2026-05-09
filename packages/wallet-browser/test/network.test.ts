@@ -148,7 +148,7 @@ describe('Sepolia network assertions and mockable MetaMask driver', () => {
     await expect(provisionSepoliaNetwork(config, driver)).resolves.toMatchObject({ status: 'verified', chainId: DEFAULT_SEPOLIA_CHAIN_ID });
     expect(calls).toEqual([`switch:0xaa36a7`, `add:0xaa36a7:${RPC_WITH_TOKEN}`, `switch:0xaa36a7`, 'switched']);
 
-    const missingRpc = resolveSepoliaNetworkConfig({ expectedAccount: ADDRESS });
+    const missingRpc = resolveSepoliaNetworkConfig({ env: {}, expectedAccount: ADDRESS });
     await expect(
       provisionSepoliaNetwork(missingRpc, makeDriver({
         async getChainId() { return 31337; },
