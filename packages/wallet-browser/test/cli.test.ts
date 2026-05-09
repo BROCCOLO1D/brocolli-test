@@ -493,9 +493,198 @@ describe('runWalletBrowserCli', () => {
     expect(exitCode).toBe(1);
     expect(stdout).toEqual([]);
     expect(stderr.join('')).toContain('MetaMask extension path does not exist');
-    expect(stderr.join('')).toContain('[redacted:METAMASK_EXTENSION_PATH]');
+    expect(stderr.join('')).toContain('[REDACTED_LOCAL_PATH]');
     expect(stderr.join('')).not.toContain(sensitivePath);
     expect(stderr.join('')).not.toContain('super-secret-token-path');
+  });
+
+  it('prints a wallet setup doctor report without exposing .env secrets', async () => {
+    const cwd = await tempRoot();
+    const extensionPath = join(cwd, 'metamask');
+    createExtension(extensionPath);
+    writeFileSync(
+      join(cwd, '.env'),
+      [
+        `METAMASK_EXTENSION_PATH=${extensionPath}`,
+        'SEPOLIA_WALLET_PRIVATE_KEY=0xnot-a-real-secret',
+        'METAMASK_PASSWORD=do-not-print-this-password',
+        'SEPOLIA_RPC_URL=https://example.invalid/super-secret-token'
+      ].join('\n')
+    );
+    writeFileSync(join(cwd, '.gitignore'), '.env\n.wallet-profiles/\n.wallet-extensions/\n.wallet-artifacts/\n');
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    const exitCode = await runWalletBrowserCli({
+      argv: ['doctor'],
+      cwd,
+      env: { METAMASK_EXTENSION_PATH: extensionPath, WALLET_PROFILE_NAME: 'agent-run' },
+      stdout: (message) => stdout.push(message),
+      stderr: (message) => stderr.push(message)
+    });
+
+    expect(exitCode).toBe(0);
+    expect(stderr).toEqual([]);
+    const output = stdout.join('');
+    const report = JSON.parse(output) as {
+      status: string;
+      paths: { profileDir?: string; metamaskExtensionPath?: string; chromiumExecutablePath?: string };
+      checks: Array<{ id: string; status: string; action?: string }>;
+      env: { envFile: { present: boolean; keys: string[] }; runtime: { present: string[]; missing: string[] } };
+    };
+    expect(report.status).toBe('warning');
+    expect(report.checks.find((check) => check.id === 'node')?.status).toBe('ok');
+    expect(report.checks.find((check) => check.id === 'metamask-extension')?.status).toBe('ok');
+    expect(report.checks.find((check) => check.id === 'wallet-profile-dir')?.status).toBe('warning');
+    expect(report.paths).toEqual({
+      chromiumExecutablePath: '[REDACTED_LOCAL_PATH]',
+      metamaskExtensionPath: '[REDACTED_LOCAL_PATH]',
+      profileDir: '[REDACTED_LOCAL_PATH]'
+    });
+    expect(report.env.envFile.present).toBe(true);
+    expect(report.env.envFile.keys).toEqual(['METAMASK_EXTENSION_PATH', 'METAMASK_PASSWORD', 'SEPOLIA_RPC_URL', 'SEPOLIA_WALLET_PRIVATE_KEY']);
+    expect(report.env.runtime.present).toEqual(['METAMASK_EXTENSION_PATH', 'WALLET_PROFILE_NAME']);
+    expect(output).not.toContain(cwd);
+    expect(output).not.toContain(extensionPath);
+    expect(output).not.toContain('0xnot-a-real-secret');
+    expect(output).not.toContain('do-not-print-this-password');
+    expect(output).not.toContain('super-secret-token');
+  });
+
+  it('returns actionable doctor errors for missing setup prerequisites', async () => {
+    const cwd = await tempRoot();
+    writeFileSync(join(cwd, '.gitignore'), '.env\n.wallet-profiles/\n');
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    const exitCode = await runWalletBrowserCli({
+      argv: ['doctor'],
+      cwd,
+      env: {},
+      stdout: (message) => stdout.push(message),
+      stderr: (message) => stderr.push(message)
+    });
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toEqual([]);
+    const report = JSON.parse(stdout.join('')) as { status: string; checks: Array<{ id: string; status: string; action?: string }> };
+    expect(report.status).toBe('error');
+    const extensionCheck = report.checks.find((check) => check.id === 'metamask-extension');
+    expect(extensionCheck).toMatchObject({ status: 'error' });
+    expect(extensionCheck?.action).toContain('pnpm wallet:metamask:fetch');
+    const gitignoreCheck = report.checks.find((check) => check.id === 'gitignore-wallet-artifacts');
+    expect(gitignoreCheck).toMatchObject({ status: 'error' });
+    expect(gitignoreCheck?.action).toContain('.wallet-artifacts/');
+  });
+
+  it('returns structured doctor JSON for invalid profile names without stack traces or local paths', async () => {
+    const cwd = await tempRoot();
+    const extensionPath = join(cwd, 'metamask');
+    createExtension(extensionPath);
+    writeFileSync(join(cwd, '.gitignore'), '.env\n.wallet-profiles/\n.wallet-extensions/\n.wallet-artifacts/\n');
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    const exitCode = await runWalletBrowserCli({
+      argv: ['doctor'],
+      cwd,
+      env: { METAMASK_EXTENSION_PATH: extensionPath, WALLET_PROFILE_NAME: 'bad/name' },
+      stdout: (message) => stdout.push(message),
+      stderr: (message) => stderr.push(message)
+    });
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toEqual([]);
+    const output = stdout.join('');
+    const report = JSON.parse(output) as { status: string; checks: Array<{ id: string; status: string; summary: string }>; paths: Record<string, string> };
+    expect(report.status).toBe('error');
+    expect(report.checks.find((check) => check.id === 'metamask-extension')?.summary).toContain('WALLET_PROFILE_NAME');
+    expect(report.checks.find((check) => check.id === 'wallet-profile-dir')?.summary).toContain('WALLET_PROFILE_NAME');
+    expect(output).not.toContain(cwd);
+    expect(output).not.toContain(extensionPath);
+    expect(output).not.toContain('doctor.js');
+    expect(output).not.toContain('file://');
+  });
+
+  it('rejects traversal-style MetaMask version values in doctor JSON', async () => {
+    const cwd = await tempRoot();
+    writeFileSync(join(cwd, '.gitignore'), '.env\n.wallet-profiles/\n.wallet-extensions/\n.wallet-artifacts/\n');
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    const exitCode = await runWalletBrowserCli({
+      argv: ['doctor'],
+      cwd,
+      env: { METAMASK_EXTENSION_VERSION: '../../outside' },
+      stdout: (message) => stdout.push(message),
+      stderr: (message) => stderr.push(message)
+    });
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toEqual([]);
+    const output = stdout.join('');
+    const report = JSON.parse(output) as { status: string; checks: Array<{ id: string; status: string; summary: string }> };
+    expect(report.status).toBe('error');
+    expect(report.checks.find((check) => check.id === 'metamask-extension')?.summary).toContain('METAMASK_EXTENSION_VERSION');
+    expect(output).not.toContain('../');
+    expect(output).not.toContain(cwd);
+  });
+
+  it('treats blank doctor extension env overrides as default artifacts for version validation', async () => {
+    const cwd = await tempRoot();
+    const extensionPath = join(cwd, '.wallet-extensions', 'metamask', '13.29.0', 'chrome');
+    mkdirSync(extensionPath, { recursive: true });
+    writeFileSync(join(extensionPath, 'manifest.json'), JSON.stringify({ manifest_version: 3, name: 'MetaMask', version: '13.28.0' }));
+    writeFileSync(join(cwd, '.gitignore'), '.env\n.wallet-profiles/\n.wallet-extensions/\n.wallet-artifacts/\n');
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    const exitCode = await runWalletBrowserCli({
+      argv: ['doctor'],
+      cwd,
+      env: { METAMASK_EXTENSION_PATH: '   ', METAMASK_EXTENSION_DIR: '', METAMASK_EXTENSION_VERSION: '13.29.0' },
+      stdout: (message) => stdout.push(message),
+      stderr: (message) => stderr.push(message)
+    });
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toEqual([]);
+    const output = stdout.join('');
+    const report = JSON.parse(output) as { status: string; checks: Array<{ id: string; status: string; summary: string }> };
+    expect(report.status).toBe('error');
+    expect(report.checks.find((check) => check.id === 'metamask-extension')?.summary).toContain('manifest version must match configured version');
+    expect(output).not.toContain(cwd);
+    expect(output).toContain('[REDACTED_LOCAL_PATH]');
+  });
+
+  it('rejects localized MetaMask manifests with traversal locales', async () => {
+    const cwd = await tempRoot();
+    const extensionPath = join(cwd, 'metamask');
+    mkdirSync(extensionPath, { recursive: true });
+    writeFileSync(
+      join(extensionPath, 'manifest.json'),
+      JSON.stringify({ manifest_version: 3, name: '__MSG_appName__', default_locale: '../../outside', version: '13.29.0' })
+    );
+    writeFileSync(join(cwd, '.gitignore'), '.env\n.wallet-profiles/\n.wallet-extensions/\n.wallet-artifacts/\n');
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+
+    const exitCode = await runWalletBrowserCli({
+      argv: ['doctor'],
+      cwd,
+      env: { METAMASK_EXTENSION_PATH: extensionPath },
+      stdout: (message) => stdout.push(message),
+      stderr: (message) => stderr.push(message)
+    });
+
+    expect(exitCode).toBe(1);
+    expect(stderr).toEqual([]);
+    const output = stdout.join('');
+    const report = JSON.parse(output) as { status: string; checks: Array<{ id: string; status: string; summary: string }> };
+    expect(report.status).toBe('error');
+    expect(report.checks.find((check) => check.id === 'metamask-extension')?.summary).toContain('default_locale');
+    expect(output).not.toContain(cwd);
+    expect(output).not.toContain('../');
   });
 
   it('prints usage without touching wallet config for help', async () => {

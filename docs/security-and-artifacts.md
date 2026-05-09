@@ -22,6 +22,7 @@ brocolli-test drives real wallet software. Even on testnets, browser profiles an
 - Reject unknown prompts.
 - Default transaction value cap is zero wei.
 - Redact private-key-like values, seed phrases, wallet passwords, RPC URLs/tokens, full `.env` contents, full wallet addresses, and sensitive local paths from public output.
+- Run `npx wallet-browser doctor` (or `pnpm wallet:doctor` in this repo) before setup/smoke runs to verify Node, Playwright/Chromium, MetaMask extension artifacts, `.env` key presence, profile directories, and wallet-local `.gitignore` patterns without exposing secrets.
 - Keep Playwright traces, screenshots, videos, reports, wallet profiles, extension bundles, and local proof manifests ignored by Git.
 
 ## Artifact rules

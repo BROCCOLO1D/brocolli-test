@@ -191,10 +191,13 @@ Prefer package APIs from tests. Use the CLI for local setup, smoke capture, and 
 
 ```bash
 pnpm wallet:cli --help
+pnpm wallet:doctor
 pnpm wallet:metamask:fetch --dry-run
 pnpm wallet:metamask:fetch
 pnpm wallet:prepare
 ```
+
+`wallet:doctor` prints JSON setup diagnostics for Node, Playwright/Chromium, MetaMask extension artifacts, `.env` key presence, wallet profile paths, and ignored wallet-local directories. It is safe to run before browser setup because it never launches Chromium and never prints private keys, wallet passwords, RPC tokens, or full `.env` contents.
 
 `wallet:prepare` prints a launch plan and does not launch Chromium. The raw local output can include machine-specific paths; keep it local or redact before sharing.
 

@@ -65,6 +65,13 @@ export {
 } from './fixture-harness.js';
 
 export { runWalletBrowserCli, type WalletBrowserCliOptions } from './cli.js';
+export {
+  createWalletBrowserDoctorReport,
+  type CreateWalletBrowserDoctorReportOptions,
+  type WalletBrowserDoctorCheck,
+  type WalletBrowserDoctorReport,
+  type WalletBrowserDoctorStatus
+} from './doctor.js';
 
 export {
   DEFAULT_METAMASK_ONBOARDING_TIMEOUT_MS,

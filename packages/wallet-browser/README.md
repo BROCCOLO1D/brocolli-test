@@ -18,6 +18,7 @@ After install, the package exposes a `wallet-browser` binary:
 
 ```bash
 pnpm exec wallet-browser --help
+pnpm exec wallet-browser doctor
 pnpm exec wallet-browser prepare
 pnpm exec wallet-browser verify-smoke-artifacts .wallet-artifacts/metamask-smoke/<run-id>
 ```
@@ -26,6 +27,7 @@ From this repository root, convenience scripts build the package first and resol
 
 ```bash
 pnpm wallet:cli --help
+pnpm wallet:doctor
 pnpm wallet:metamask:fetch --dry-run
 pnpm wallet:metamask:fetch
 pnpm wallet:prepare
@@ -38,6 +40,7 @@ Commands:
 
 ```text
 wallet-browser prepare
+wallet-browser doctor
 wallet-browser smoke-metamask
 wallet-browser smoke-fixture-extension
 wallet-browser verify-smoke-artifacts [artifact-dir]
@@ -46,6 +49,8 @@ wallet-browser onboarding-plan
 wallet-browser profile-bootstrap-import --dry-run
 wallet-browser network-plan
 ```
+
+`doctor` prints setup diagnostics for Node 22, Playwright/Chromium resolution, the configured MetaMask extension path/manifest, `.env` key presence, wallet profile usability, and `.gitignore` protection for local wallet directories. It exits non-zero for actionable setup errors and never prints `.env` values, private keys, wallet passwords, or RPC tokens.
 
 `prepare`, `onboarding-plan`, `network-plan`, and dry-run commands print redacted plans. The raw local output can still contain machine-specific paths; redact before sharing. `smoke-metamask` launches Chromium and captures local-only screenshots, but it does not import, unlock, connect, sign, or transact.
 
@@ -86,7 +91,17 @@ verifySmokeArtifactManifest('.wallet-artifacts/metamask-smoke/<run-id>');
 
 ## Configuration
 
-Prefer explicit options in code. Environment-backed local runs should use ignored `.env` files. Relevant keys include:
+Prefer explicit options in code. Environment-backed local runs should use ignored `.env` files. Before launching a browser, run:
+
+```bash
+npx wallet-browser doctor
+# or inside this repo:
+pnpm wallet:doctor
+```
+
+The doctor report lists configured key names and setup status only; it does not print secret values. Fix any `error` checks before running `prepare` or smoke commands.
+
+Relevant keys include:
 
 - `METAMASK_EXTENSION_PATH` or `METAMASK_EXTENSION_DIR`
 - `METAMASK_EXTENSION_VERSION`

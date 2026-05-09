@@ -12,6 +12,7 @@
     "test": "pnpm -r test",
     "typecheck": "pnpm -r typecheck",
     "wallet:cli": "pnpm --filter @broccolo1d/wallet-browser build && node packages/wallet-browser/dist/cli.js",
+    "wallet:doctor": "pnpm --filter @broccolo1d/wallet-browser build && node packages/wallet-browser/dist/cli.js doctor",
     "wallet:prepare": "pnpm --filter @broccolo1d/wallet-browser build && node packages/wallet-browser/dist/cli.js prepare",
     "wallet:smoke:metamask": "pnpm --filter @broccolo1d/wallet-browser build && node packages/wallet-browser/dist/cli.js smoke-metamask",
     "wallet:smoke:fixture-extension": "pnpm --filter @broccolo1d/wallet-browser build && node packages/wallet-browser/dist/cli.js smoke-fixture-extension",

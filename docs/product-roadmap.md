@@ -103,6 +103,7 @@ try {
 Implemented commands:
 
 ```text
+wallet-browser doctor
 wallet-browser prepare
 wallet-browser smoke-metamask
 wallet-browser smoke-fixture-extension

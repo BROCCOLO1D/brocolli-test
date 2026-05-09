@@ -37,9 +37,12 @@ describe('resolveWalletBrowserConfig', () => {
   });
 
   it('fails clearly when the default pinned MetaMask artifact path is missing', () => {
-    expect(() => resolveWalletBrowserConfig({ cwd: tempRoot(), env: {} })).toThrow(
+    const cwd = tempRoot();
+    expect(() => resolveWalletBrowserConfig({ cwd, env: {} })).toThrow(
       /MetaMask extension path does not exist.*METAMASK_EXTENSION_PATH or METAMASK_EXTENSION_DIR/
     );
+    expect(() => resolveWalletBrowserConfig({ cwd, env: {} })).toThrow(/\[REDACTED_LOCAL_PATH\]/);
+    expect(() => resolveWalletBrowserConfig({ cwd, env: {} })).not.toThrow(new RegExp(cwd.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   });
 
   it('resolves METAMASK_EXTENSION_PATH and creates the default isolated profile directory', () => {
@@ -55,6 +58,17 @@ describe('resolveWalletBrowserConfig', () => {
     expect(config.metamaskExtensionIdentity).toEqual({ name: 'MetaMask', shortName: undefined, version: '13.29.0' });
     expect(config.profileDir).toBe(join(cwd, '.wallet-profiles', 'sepolia-burner'));
     expect(config.preserveProfile).toBe(false);
+  });
+
+  it('treats blank extension env overrides as absent like doctor diagnostics', () => {
+    const cwd = tempRoot();
+    const extensionPath = join(cwd, '.wallet-extensions', 'metamask', PINNED_METAMASK_VERSION, 'chrome');
+    mkdirSync(extensionPath, { recursive: true });
+    writeFileSync(join(extensionPath, 'manifest.json'), JSON.stringify({ manifest_version: 3, name: 'MetaMask', version: PINNED_METAMASK_VERSION }));
+
+    const config = resolveWalletBrowserConfig({ cwd, env: { METAMASK_EXTENSION_PATH: '   ', METAMASK_EXTENSION_DIR: '' } });
+
+    expect(config.metamaskExtensionPath).toBe(extensionPath);
   });
 
   it('allows explicit config options to override env values for library consumers', () => {
@@ -160,6 +174,24 @@ describe('resolveWalletBrowserConfig', () => {
     const config = resolveWalletBrowserConfig({ cwd, env: { METAMASK_EXTENSION_PATH: extensionPath } });
 
     expect(config.metamaskExtensionIdentity).toEqual({ name: 'MetaMask', shortName: 'MetaMask', version: '13.29.0' });
+  });
+
+  it('rejects traversal-style default MetaMask artifact versions in shared config', () => {
+    expect(() => resolveWalletBrowserConfig({ cwd: tempRoot(), env: { METAMASK_EXTENSION_VERSION: '../../outside' } })).toThrow(
+      /METAMASK_EXTENSION_VERSION must be a semver-like version string/
+    );
+  });
+
+  it('rejects localized manifests whose default_locale escapes _locales in shared config', () => {
+    const cwd = tempRoot();
+    const extensionPath = join(cwd, 'localized-metamask');
+    mkdirSync(extensionPath, { recursive: true });
+    writeFileSync(
+      join(extensionPath, 'manifest.json'),
+      JSON.stringify({ manifest_version: 3, name: '__MSG_appName__', default_locale: '../../outside', version: '13.29.0' })
+    );
+
+    expect(() => resolveWalletBrowserConfig({ cwd, env: { METAMASK_EXTENSION_PATH: extensionPath } })).toThrow(/default_locale/);
   });
 
   it('rejects unpacked extension directories whose manifest does not identify MetaMask', () => {

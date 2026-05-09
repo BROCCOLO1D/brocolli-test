@@ -54,18 +54,17 @@ const DEFAULT_PROFILE_NAME = 'sepolia-burner';
 export function resolveWalletBrowserConfig(options: ResolveWalletBrowserConfigOptions = {}): WalletBrowserConfig {
   const cwd = options.cwd ?? process.cwd();
   const env = options.env ?? process.env;
-  const metamaskExtensionVersion = options.metamaskExtensionVersion?.trim() || env.METAMASK_EXTENSION_VERSION?.trim() || PINNED_METAMASK_VERSION;
-  const extensionPathValue =
-    options.metamaskExtensionPath ??
-    options.metamaskExtensionDir ??
-    env.METAMASK_EXTENSION_PATH ??
-    env.METAMASK_EXTENSION_DIR ??
-    defaultMetamaskExtensionPath(metamaskExtensionVersion);
-  const usesDefaultExtensionArtifact =
-    options.metamaskExtensionPath === undefined &&
-    options.metamaskExtensionDir === undefined &&
-    env.METAMASK_EXTENSION_PATH === undefined &&
-    env.METAMASK_EXTENSION_DIR === undefined;
+  const metamaskExtensionVersion = normalizeMetaMaskExtensionVersion(
+    options.metamaskExtensionVersion?.trim() || env.METAMASK_EXTENSION_VERSION?.trim() || PINNED_METAMASK_VERSION
+  );
+  const explicitExtensionPath = firstNonBlank(
+    options.metamaskExtensionPath,
+    options.metamaskExtensionDir,
+    env.METAMASK_EXTENSION_PATH,
+    env.METAMASK_EXTENSION_DIR
+  );
+  const extensionPathValue = explicitExtensionPath ?? defaultMetamaskExtensionPath(metamaskExtensionVersion);
+  const usesDefaultExtensionArtifact = explicitExtensionPath === undefined;
 
   const metamaskExtensionPath = resolve(cwd, extensionPathValue);
   assertDirectory(metamaskExtensionPath, 'MetaMask extension path');
@@ -92,19 +91,41 @@ export function resolveWalletBrowserConfig(options: ResolveWalletBrowserConfigOp
 }
 
 function defaultMetamaskExtensionPath(version: string): string {
+  normalizeMetaMaskExtensionVersion(version);
   return join('.wallet-extensions', 'metamask', version, 'chrome');
+}
+
+function firstNonBlank(...values: Array<string | undefined>): string | undefined {
+  for (const value of values) {
+    if (typeof value !== 'string') continue;
+    const trimmed = value.trim();
+    if (trimmed !== '') return trimmed;
+  }
+  return undefined;
+}
+
+function normalizeMetaMaskExtensionVersion(value: string): string {
+  const version = value.trim();
+  if (!/^\d+\.\d+\.\d+(?:[-+][A-Za-z0-9.-]+)?$/.test(version)) {
+    throw new Error('METAMASK_EXTENSION_VERSION must be a semver-like version string without path separators.');
+  }
+  return version;
 }
 
 function assertDirectory(path: string, label: string): void {
   if (!existsSync(path)) {
     throw new Error(
-      `${label} does not exist: ${path}. Set METAMASK_EXTENSION_PATH or METAMASK_EXTENSION_DIR to an unpacked MetaMask extension directory, or prepare the pinned default artifact under ${defaultMetamaskExtensionPath(PINNED_METAMASK_VERSION)}.`
+      `${label} does not exist: ${redactLocalPath(path)}. Set METAMASK_EXTENSION_PATH or METAMASK_EXTENSION_DIR to an unpacked MetaMask extension directory, or prepare the pinned default artifact under ${defaultMetamaskExtensionPath(PINNED_METAMASK_VERSION)}.`
     );
   }
 
   if (!statSync(path).isDirectory()) {
-    throw new Error(`${label} must be a directory: ${path}`);
+    throw new Error(`${label} must be a directory: ${redactLocalPath(path)}`);
   }
+}
+
+function redactLocalPath(value: string): string {
+  return value ? '[REDACTED_LOCAL_PATH]' : value;
 }
 
 function assertSafeProfileDir(profileDir: string, cwd: string, metamaskExtensionPath: string): void {
@@ -130,7 +151,7 @@ function assertManifestVersionMatchesConfiguredVersion(
 ): void {
   if (identity.version !== configuredVersion) {
     throw new Error(
-      `MetaMask extension manifest version must match configured version for default artifact ${extensionPath}: expected ${configuredVersion}, found ${identity.version ?? 'missing'}.`
+      `MetaMask extension manifest version must match configured version for default artifact ${redactLocalPath(extensionPath)}: expected ${configuredVersion}, found ${identity.version ?? 'missing'}.`
     );
   }
 }
@@ -138,12 +159,12 @@ function assertManifestVersionMatchesConfiguredVersion(
 function readMetaMaskManifestIdentity(extensionPath: string): MetaMaskExtensionIdentity {
   const manifestPath = join(extensionPath, 'manifest.json');
   if (!existsSync(manifestPath)) {
-    throw new Error(`MetaMask extension manifest is missing: ${manifestPath}`);
+    throw new Error(`MetaMask extension manifest is missing: ${redactLocalPath(manifestPath)}`);
   }
 
   const manifest = readManifest(manifestPath);
   if (manifest.manifest_version !== 3) {
-    throw new Error(`MetaMask extension manifest_version must be 3: ${manifestPath}`);
+    throw new Error(`MetaMask extension manifest_version must be 3: ${redactLocalPath(manifestPath)}`);
   }
 
   const rawName = typeof manifest.name === 'string' ? manifest.name : '';
@@ -152,7 +173,7 @@ function readMetaMaskManifestIdentity(extensionPath: string): MetaMaskExtensionI
   const name = resolveManifestText(rawName, localeMessages).trim();
   const shortName = resolveManifestText(rawShortName, localeMessages).trim();
   if (!isMetaMaskManifestName(name) && !isMetaMaskManifestName(shortName)) {
-    throw new Error(`MetaMask extension manifest must identify MetaMask: ${manifestPath}`);
+    throw new Error(`MetaMask extension manifest must identify MetaMask: ${redactLocalPath(manifestPath)}`);
   }
 
   const identity: MetaMaskExtensionIdentity = { name };
@@ -176,7 +197,14 @@ function readLocaleMessages(extensionPath: string, manifest: Record<string, unkn
     return {};
   }
 
-  const messagesPath = join(extensionPath, '_locales', defaultLocale, 'messages.json');
+  if (!/^[A-Za-z0-9_@-]+$/.test(defaultLocale)) {
+    throw new Error('MetaMask extension default_locale contains unsupported characters.');
+  }
+  const localesRoot = resolve(extensionPath, '_locales');
+  const messagesPath = resolve(localesRoot, defaultLocale, 'messages.json');
+  if (!isSamePathOrChild(messagesPath, localesRoot)) {
+    throw new Error('MetaMask extension default_locale resolves outside the _locales directory.');
+  }
   if (!existsSync(messagesPath)) {
     return {};
   }
@@ -209,7 +237,7 @@ function readManifest(manifestPath: string): Record<string, unknown> {
     return manifest as Record<string, unknown>;
   } catch (error) {
     throw new Error(
-      `MetaMask extension manifest must be valid JSON: ${manifestPath}${error instanceof Error ? ` (${error.message})` : ''}`
+      `MetaMask extension manifest must be valid JSON: ${redactLocalPath(manifestPath)}${error instanceof Error ? ` (${error.message})` : ''}`
     );
   }
 }

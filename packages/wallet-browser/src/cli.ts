@@ -8,6 +8,7 @@ import { createMetaMaskOnboardingPlan, resolveMetaMaskOnboardingConfig } from '.
 import { createSepoliaNetworkPlan, resolveSepoliaNetworkConfig } from './network.js';
 import { createProfileBootstrapImportDryRun } from './profile-bootstrap.js';
 import { verifyFixtureConnectionProofManifest } from './fixture-proof.js';
+import { createWalletBrowserDoctorReport } from './doctor.js';
 import {
   captureFixtureExtensionSmokeScreenshots,
   captureMetaMaskSmokeScreenshots,
@@ -58,6 +59,7 @@ const PREPARE_ERROR_REDACT_KEYS = ['METAMASK_EXTENSION_PATH', 'METAMASK_EXTENSIO
 
 const USAGE = `Usage:
   wallet-browser prepare
+  wallet-browser doctor
   wallet-browser smoke-metamask
   wallet-browser smoke-fixture-extension
   wallet-browser verify-smoke-artifacts [artifact-dir]
@@ -66,7 +68,8 @@ const USAGE = `Usage:
   wallet-browser profile-bootstrap-import --dry-run
   wallet-browser network-plan
 
-Print a sanitized Chromium persistent-context launch plan for the pinned MetaMask extension profile,
+Print setup diagnostics for Node, Playwright/Chromium, MetaMask, .env, and ignored wallet artifacts,
+print a sanitized Chromium persistent-context launch plan for the pinned MetaMask extension profile,
 launch real Chromium with MetaMask loaded and capture local-only smoke screenshots,
 launch real Chromium with a generated fake extension to prove extension-loading mechanics only,
 print a redacted MetaMask onboarding plan for the configured burner wallet, or print a
@@ -116,6 +119,12 @@ export async function runWalletBrowserCli(options: WalletBrowserCliOptions = {})
   if (command === '--help' || command === '-h' || command === 'help') {
     stdout(USAGE);
     return 0;
+  }
+
+  if (command === 'doctor') {
+    const report = createWalletBrowserDoctorReport({ cwd: options.cwd, env: options.env });
+    stdout(`${JSON.stringify(report, null, 2)}\n`);
+    return report.status === 'error' ? 1 : 0;
   }
 
   if (command === 'smoke-metamask') {
