@@ -1,5 +1,5 @@
 import { waitForMetaMaskExtensionPage, type ExtensionBrowserContextLike, type ExtensionPageLike } from './extension-pages.js';
-import { type WalletConnectionPromptInput, type WalletPromptDriver } from './wallet-control.js';
+import { type WalletConnectionPromptInput, type WalletPromptDriver, type WalletSignaturePromptInput } from './wallet-control.js';
 
 export interface MetaMaskPromptLocatorLike {
   textContent?(): Promise<string | null>;
@@ -15,6 +15,7 @@ export interface MetaMaskPromptSelectors {
   pageText: string;
   nextButtonCandidates: readonly string[];
   connectButtonCandidates: readonly string[];
+  signatureButtonCandidates: readonly string[];
 }
 
 export interface MetaMaskPromptDriverOptions {
@@ -35,6 +36,12 @@ export const DEFAULT_METAMASK_PROMPT_SELECTORS: MetaMaskPromptSelectors = {
     '[data-testid="page-container-footer-connect"]',
     '[data-testid="page-container-footer-confirm"]',
     'button:has-text("Connect")'
+  ],
+  signatureButtonCandidates: [
+    '[data-testid="page-container-footer-confirm"]',
+    '[data-testid="confirm-footer-button"]',
+    'button:has-text("Sign")',
+    'button:has-text("Confirm")'
   ]
 };
 
@@ -67,6 +74,15 @@ export function createMetaMaskPromptDriver(options: MetaMaskPromptDriverOptions)
         ensureKeeperPage: options.ensureKeeperPage ?? true
       });
       await approveMetaMaskConnectionPrompt(page as MetaMaskPromptPageLike, input, mergePromptSelectors(options.selectors));
+    },
+    async approveSignature(input) {
+      const page = await waitForMetaMaskExtensionPage(options.context, {
+        extensionId: options.extensionId,
+        preferredPath: '/notification.html',
+        timeoutMs: options.timeoutMs,
+        ensureKeeperPage: options.ensureKeeperPage ?? true
+      });
+      await approveMetaMaskSignaturePrompt(page as MetaMaskPromptPageLike, input, mergePromptSelectors(options.selectors));
     }
   };
 }
@@ -108,6 +124,88 @@ export function assertMetaMaskConnectionPromptText(promptText: string, expectedO
   }
 }
 
+const SIGNATURE_PROMPT_MARKERS = [
+  'signature request',
+  'sign message',
+  'sign this message',
+  'personal_sign',
+  'eth_signtypeddata',
+  'typed data signature'
+] as const;
+
+const NON_SIGNATURE_PROMPT_MARKERS = [
+  'connect with metamask',
+  'wants to connect',
+  'permissions request',
+  'confirm transaction',
+  'send transaction',
+  'transaction request',
+  'spending cap',
+  'approve token',
+  'edit permission'
+] as const;
+
+export async function approveMetaMaskSignaturePrompt(
+  page: MetaMaskPromptPageLike,
+  input: WalletSignaturePromptInput,
+  selectors: MetaMaskPromptSelectors = DEFAULT_METAMASK_PROMPT_SELECTORS
+): Promise<void> {
+  const promptText = await readPromptText(page, selectors.pageText);
+  assertMetaMaskSignaturePromptText(promptText, input);
+
+  const nextButton = await findVisibleClickable(page, selectors.nextButtonCandidates);
+  if (nextButton) {
+    await nextButton.click?.();
+  }
+
+  const signButton = await findVisibleClickable(page, selectors.signatureButtonCandidates);
+  if (!signButton) {
+    throw new Error('MetaMask signature approval button was not visible; refusing to approve unknown prompt state.');
+  }
+  await signButton.click?.();
+}
+
+export function assertMetaMaskSignaturePromptText(promptText: string, input: WalletSignaturePromptInput): void {
+  const normalizedText = promptText.toLowerCase();
+  const unexpectedMarker = NON_SIGNATURE_PROMPT_MARKERS.find((marker) => normalizedText.includes(marker));
+  if (unexpectedMarker) {
+    throw new Error(`Unexpected MetaMask prompt marker "${unexpectedMarker}" while expecting a signature prompt; refusing to click.`);
+  }
+  if (!SIGNATURE_PROMPT_MARKERS.some((marker) => normalizedText.includes(marker))) {
+    throw new Error('MetaMask notification page did not look like a signature prompt; refusing to click.');
+  }
+
+  if (input.signatureKind !== 'personal_sign' && input.signatureKind !== 'typed_data') {
+    throw new Error('Expected signature kind is required before approving a MetaMask signature prompt.');
+  }
+
+  if (!input.expectedChainIdHex?.trim()) {
+    throw new Error('Expected signature chain is required before approving a MetaMask signature prompt.');
+  }
+
+  const expectedOriginMarker = normalizeExpectedOriginMarker(input.origin);
+  if (!expectedOriginMarker) {
+    throw new Error('Expected dapp origin is required before approving a MetaMask signature prompt.');
+  }
+  if (!normalizedText.includes(expectedOriginMarker.toLowerCase())) {
+    throw new Error(`Expected dapp origin ${expectedOriginMarker} was not found in MetaMask signature prompt; refusing to click.`);
+  }
+
+  if (!input.message?.trim()) {
+    throw new Error('Expected signature message is required before approving a MetaMask signature prompt.');
+  }
+  if (!normalizedText.includes(input.message.toLowerCase())) {
+    throw new Error('Expected signature message was not found in MetaMask signature prompt; refusing to click.');
+  }
+
+  if (input.signatureKind === 'personal_sign' && /typed\s*data|eth_signtypeddata/i.test(promptText)) {
+    throw new Error('MetaMask prompt looked like typed data while expecting personal_sign; refusing to click.');
+  }
+  if (input.signatureKind === 'typed_data' && !/typed\s*data|eth_signtypeddata/i.test(promptText)) {
+    throw new Error('MetaMask prompt did not include typed-data markers while expecting typed_data; refusing to click.');
+  }
+}
+
 async function readPromptText(page: MetaMaskPromptPageLike, selector: string): Promise<string> {
   const text = await page.locator(selector).textContent?.();
   if (!text?.trim()) {
@@ -138,7 +236,8 @@ function mergePromptSelectors(selectors: Partial<MetaMaskPromptSelectors> | unde
   return {
     pageText: selectors?.pageText ?? DEFAULT_METAMASK_PROMPT_SELECTORS.pageText,
     nextButtonCandidates: selectors?.nextButtonCandidates ?? DEFAULT_METAMASK_PROMPT_SELECTORS.nextButtonCandidates,
-    connectButtonCandidates: selectors?.connectButtonCandidates ?? DEFAULT_METAMASK_PROMPT_SELECTORS.connectButtonCandidates
+    connectButtonCandidates: selectors?.connectButtonCandidates ?? DEFAULT_METAMASK_PROMPT_SELECTORS.connectButtonCandidates,
+    signatureButtonCandidates: selectors?.signatureButtonCandidates ?? DEFAULT_METAMASK_PROMPT_SELECTORS.signatureButtonCandidates
   };
 }
 

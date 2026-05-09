@@ -225,8 +225,66 @@ describe('wallet-control helpers', () => {
     expect(serialized).toContain('https://sepolia.infura.io/[redacted-url]');
   });
 
+  it('fails closed before dapp or prompt actions when signature kind is not explicit', async () => {
+    const calls: string[] = [];
+    const dapp: WalletDappDriver = {
+      async requestConnect() {},
+      async getConnectedAccount() { return ADDRESS; },
+      async requestSignature() { calls.push('dapp:signature'); }
+    };
+    const prompt: WalletPromptDriver = { async approveSignature() { calls.push('prompt:signature'); } };
+
+    await expect(
+      // @ts-expect-error intentionally exercises the runtime fail-closed guard for untyped callers.
+      approveSignature({
+        dapp,
+        prompt,
+        origin: 'https://fixture.example',
+        expectedAccount: ADDRESS,
+        expectedChainId: DEFAULT_SEPOLIA_CHAIN_ID,
+        network: makeNetworkDriver(),
+        message: 'hello'
+      })
+    ).rejects.toThrow(/signature kind.*required/i);
+
+    expect(calls).toEqual([]);
+  });
+
+  it('fails closed before dapp or prompt actions when signature origin or message is missing', async () => {
+    const calls: string[] = [];
+    const dapp: WalletDappDriver = {
+      async requestConnect() {},
+      async getConnectedAccount() { return ADDRESS; },
+      async requestSignature() { calls.push('dapp:signature'); }
+    };
+    const prompt: WalletPromptDriver = { async approveSignature() { calls.push('prompt:signature'); } };
+
+    await expect(approveSignature({
+      dapp,
+      prompt,
+      expectedAccount: ADDRESS,
+      expectedChainId: DEFAULT_SEPOLIA_CHAIN_ID,
+      network: makeNetworkDriver(),
+      message: 'hello',
+      signatureKind: 'personal_sign'
+    })).rejects.toThrow(/origin.*required/i);
+
+    await expect(approveSignature({
+      dapp,
+      prompt,
+      origin: 'https://fixture.example',
+      expectedAccount: ADDRESS,
+      expectedChainId: DEFAULT_SEPOLIA_CHAIN_ID,
+      network: makeNetworkDriver(),
+      message: '   ',
+      signatureKind: 'personal_sign'
+    })).rejects.toThrow(/signature message.*required/i);
+
+    expect(calls).toEqual([]);
+  });
+
   it('fails closed for signature and transaction prompts until prompt driver approval is explicitly implemented', async () => {
-    await expect(approveSignature({ prompt: {}, origin: 'https://fixture.example', expectedAccount: ADDRESS, message: 'hello' })).rejects.toThrow(/not implemented|fail closed/i);
+    await expect(approveSignature({ prompt: {}, origin: 'https://fixture.example', expectedAccount: ADDRESS, expectedChainId: DEFAULT_SEPOLIA_CHAIN_ID, network: makeNetworkDriver(), message: 'hello', signatureKind: 'personal_sign' })).rejects.toThrow(/not implemented|fail closed/i);
     await expect(approveTransaction({ prompt: {}, origin: 'https://fixture.example', expectedAccount: ADDRESS, to: ADDRESS, value: '0x0' })).rejects.toThrow(/not implemented|fail closed/i);
   });
 
@@ -259,7 +317,7 @@ describe('wallet-control helpers', () => {
 
     await dapp.requestConnect();
     await expect(dapp.getConnectedAccount()).resolves.toBe(ADDRESS);
-    await dapp.requestSignature?.({ expectedAccount: ADDRESS, message: 'hello' });
+    await dapp.requestSignature?.({ expectedAccount: ADDRESS, message: 'hello', signatureKind: 'personal_sign' });
     await dapp.requestTransaction?.({ expectedAccount: ADDRESS, to: ADDRESS, value: '0x0' });
 
     expect(calls).toEqual([
@@ -291,7 +349,12 @@ describe('wallet-control helpers', () => {
       prompt,
       origin: 'https://fixture.example/sign?session=sensitive-session',
       expectedAccount: ADDRESS,
+      expectedChainId: DEFAULT_SEPOLIA_CHAIN_ID,
+      network: makeNetworkDriver(),
+      expectedChainId: DEFAULT_SEPOLIA_CHAIN_ID,
+      network: makeNetworkDriver(),
       message: 'hello',
+      signatureKind: 'personal_sign',
       logger: (event) => events.push(event),
       metadata: {
         driverError: envText,
@@ -327,7 +390,10 @@ describe('wallet-control helpers', () => {
         prompt,
         origin: 'https://fixture.example/sign?session=sensitive-session',
         expectedAccount: ADDRESS,
+        expectedChainId: DEFAULT_SEPOLIA_CHAIN_ID,
+        network: makeNetworkDriver(),
         message: 'hello',
+        signatureKind: 'personal_sign',
         logger: (event) => events.push(event),
         metadata: { rpcUrl: RPC_WITH_CREDENTIAL }
       })
@@ -356,7 +422,7 @@ describe('wallet-control helpers', () => {
       async requestConnect() {},
       async getConnectedAccount() { return ADDRESS; },
       async requestSignature(input) {
-        calls.push(`dapp:signature:${input.message}`);
+        calls.push(`dapp:signature:${input.signatureKind}:${input.message}`);
       },
       async requestTransaction(input) {
         calls.push(`dapp:transaction:${input.to}:${input.value}`);
@@ -364,19 +430,19 @@ describe('wallet-control helpers', () => {
     };
     const prompt: WalletPromptDriver = {
       async approveSignature(input) {
-        calls.push(`prompt:signature:${input.origin}:${input.expectedAccount}:${input.message}`);
+        calls.push(`prompt:signature:${input.signatureKind}:${input.origin}:${input.expectedAccount}:${input.expectedChainIdHex}:${input.message}`);
       },
       async approveTransaction(input) {
         calls.push(`prompt:transaction:${input.origin}:${input.to}:${input.value}`);
       }
     };
 
-    await approveSignature({ dapp, prompt, origin: 'https://fixture.example', expectedAccount: ADDRESS, message: 'hello' });
+    await approveSignature({ dapp, prompt, origin: 'https://fixture.example', expectedAccount: ADDRESS, expectedChainId: DEFAULT_SEPOLIA_CHAIN_ID, network: makeNetworkDriver(), message: 'hello', signatureKind: 'typed_data' });
     await approveTransaction({ dapp, prompt, origin: 'https://fixture.example', expectedAccount: ADDRESS, to: ADDRESS, value: '0x0', logger: (event) => events.push(event) });
 
     expect(calls).toEqual([
-      'dapp:signature:hello',
-      `prompt:signature:https://fixture.example:${ADDRESS}:hello`,
+      'dapp:signature:typed_data:hello',
+      `prompt:signature:typed_data:https://fixture.example:${ADDRESS}:0xaa36a7:hello`,
       `dapp:transaction:${ADDRESS}:0x0`,
       `prompt:transaction:https://fixture.example:${ADDRESS}:0x0`
     ]);

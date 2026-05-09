@@ -5,11 +5,13 @@ import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 
 import { defineConfig, expect, test as base, type BrowserContext, type Page, type PlaywrightTestConfig, type TestInfo } from '@playwright/test';
 import {
+  approveSignature,
   assertWalletState,
   connectWallet,
   createWalletDappPageDriver,
   launchWalletBrowser,
   maskEthereumAddress,
+  switchNetwork,
   type ConnectWalletResult,
   type MetaMaskNetworkDriver,
   type SepoliaNetworkAssertionResult,
@@ -18,7 +20,9 @@ import {
   type WalletDappDriver,
   type WalletDappPageDriverSelectors,
   type WalletGuardrailConfig,
-  type WalletPromptDriver
+  type WalletPromptDriver,
+  type WalletSignatureKind,
+  type WalletSignaturePromptInput
 } from '@broccolo1d/wallet-browser';
 
 export { expect };
@@ -84,11 +88,28 @@ export interface WalletAssertStateOptions {
   expectedChainId?: string | number;
 }
 
+export interface WalletSignatureOptions extends WalletAssertStateOptions {
+  /** Message text or canonical typed-data JSON expected in the dapp and MetaMask prompt. */
+  message: string;
+  /** Expected dapp origin. Defaults to walletConfig.origin; missing origin fails closed. */
+  origin?: string;
+  /** Developer-first dapp action: click/request the signature in the app. */
+  click?: () => Promise<void>;
+  /** Backwards-compatible explicit dapp signature action alias. */
+  requestSignature?: () => Promise<void>;
+  guardrails?: WalletGuardrailConfig;
+}
+
+export type WalletSwitchChainOptions = WalletAssertStateOptions;
+
 export interface WalletQa {
   connect(options?: WalletConnectOptions): Promise<ConnectWalletResult>;
   assertState(options?: WalletAssertStateOptions): Promise<SepoliaNetworkAssertionResult>;
   expectConnected(options?: WalletAssertStateOptions): Promise<SepoliaNetworkAssertionResult>;
   expectChain(options?: Pick<WalletAssertStateOptions, 'expectedChainId' | 'expectedAccount'>): Promise<SepoliaNetworkAssertionResult>;
+  switchChain(options?: WalletSwitchChainOptions): Promise<SepoliaNetworkAssertionResult>;
+  signMessage(options: WalletSignatureOptions): Promise<void>;
+  signTypedData(options: WalletSignatureOptions): Promise<void>;
   maskAddress(address: string): string;
 }
 
@@ -271,6 +292,37 @@ export function createWalletQa(page: Page, config: WalletQaConfig): WalletQa {
     return assertWalletState({ network, expectedAccount, expectedChainId });
   }
 
+  async function signWithKind(helperName: string, signatureKind: WalletSignatureKind, options: WalletSignatureOptions): Promise<void> {
+    const expectedAccount = options.expectedAccount ?? config.expectedAccount;
+    const expectedChainId = options.expectedChainId ?? config.expectedChainId;
+    if (!expectedAccount || expectedChainId === undefined) {
+      throw new Error(`${helperName} requires expectedAccount and expectedChainId in options or walletConfig.`);
+    }
+
+    const origin = options.origin ?? config.origin;
+    if (!origin) {
+      throw new Error(`${helperName} requires origin in options or walletConfig.origin before approving a wallet prompt; fail closed.`);
+    }
+    if (!options.message) {
+      throw new Error(`${helperName} requires an expected message before approving a wallet prompt; fail closed.`);
+    }
+
+    const prompt = requireConfigured(config.prompt, `${helperName} requires walletConfig.prompt to approve a real wallet prompt; fail closed.`);
+    const network = requireConfigured(config.network, `${helperName} requires walletConfig.network to verify chain/account before signing; fail closed.`);
+    const dapp = createSignatureDappDriver(page, config, options.click ?? options.requestSignature);
+    return approveSignature({
+      dapp,
+      prompt,
+      network,
+      origin,
+      expectedAccount,
+      expectedChainId,
+      message: options.message,
+      signatureKind,
+      guardrails: options.guardrails ?? config.guardrails
+    });
+  }
+
   return {
     async connect(options = {}) {
       const expectedAccount = options.expectedAccount ?? config.expectedAccount;
@@ -313,6 +365,25 @@ export function createWalletQa(page: Page, config: WalletQaConfig): WalletQa {
       return assertStateForHelper('wallet.expectChain', options);
     },
 
+    async switchChain(options = {}) {
+      const expectedAccount = options.expectedAccount ?? config.expectedAccount;
+      const expectedChainId = options.expectedChainId ?? config.expectedChainId;
+      if (!expectedAccount || expectedChainId === undefined) {
+        throw new Error('wallet.switchChain requires expectedAccount and expectedChainId in options or walletConfig.');
+      }
+
+      const network = requireConfigured(config.network, 'wallet.switchChain requires walletConfig.network to switch and verify chain/account; fail closed.');
+      return switchNetwork({ network, expectedAccount, expectedChainId });
+    },
+
+    async signMessage(options) {
+      return signWithKind('wallet.signMessage', 'personal_sign', options);
+    },
+
+    async signTypedData(options) {
+      return signWithKind('wallet.signTypedData', 'typed_data', options);
+    },
+
     maskAddress(address: string) {
       return maskEthereumAddress(address);
     }
@@ -335,6 +406,24 @@ function createDappDriver(page: Page, config: WalletQaConfig, requestConnection?
   }
 
   return requireConfigured(configured, 'wallet.connect requires click, requestConnection, walletConfig.dapp, or walletConfig.dappSelectors to trigger the dapp connection action; fail closed.');
+}
+
+function createSignatureDappDriver(page: Page, config: WalletQaConfig, requestSignature?: () => Promise<void>): Pick<WalletDappDriver, 'requestSignature'> {
+  const configured = config.dapp;
+  if (requestSignature) {
+    return {
+      async requestSignature() {
+        await requestSignature();
+      }
+    };
+  }
+  if (configured?.requestSignature) {
+    return { requestSignature: configured.requestSignature.bind(configured) };
+  }
+  if (config.dappSelectors) {
+    return { requestSignature: createWalletDappPageDriver({ page, selectors: config.dappSelectors }).requestSignature };
+  }
+  throw new Error('wallet signature helpers require click, requestSignature, or walletConfig.dapp.requestSignature to trigger the dapp signature action; fail closed.');
 }
 
 export function createWalletArtifacts(page: Page, config: WalletQaConfig, testInfo: TestInfo): WalletArtifacts {
@@ -407,6 +496,10 @@ export function createFailClosedWalletPromptDriver(options: FailClosedWalletProm
     async approveSignature(input) {
       assertPromptOrigin(input.origin, options.origin);
       assertPromptAccount(input.expectedAccount, expectedAccount);
+      assertPromptSignatureSafety(input);
+      if (input.expectedChainIdHex.toLowerCase() !== expectedChainIdHex) {
+        throw new Error(`Wallet signature prompt chain ${input.expectedChainIdHex} does not match expected ${expectedChainIdHex}; fail closed.`);
+      }
       if (!options.delegate?.approveSignature) {
         throw new Error('Unexpected signature prompt; fail closed.');
       }
@@ -753,4 +846,16 @@ function requireConfigured<T>(value: T | undefined, message: string): T {
 function sanitizePathPart(value: string): string {
   const sanitized = value.trim().replace(/[^a-zA-Z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
   return sanitized || 'artifact';
+}
+
+function assertPromptSignatureSafety(input: WalletSignaturePromptInput): void {
+  if (input.signatureKind !== 'personal_sign' && input.signatureKind !== 'typed_data') {
+    throw new Error('Wallet signature prompt kind is required; fail closed.');
+  }
+  if (!input.expectedChainIdHex?.trim()) {
+    throw new Error('Wallet signature prompt chain is required; fail closed.');
+  }
+  if (!input.message?.trim()) {
+    throw new Error('Wallet signature prompt message is required; fail closed.');
+  }
 }

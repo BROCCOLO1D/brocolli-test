@@ -32,6 +32,9 @@ const origin = 'http://127.0.0.1:5173';
 const promptAutomation: WalletPromptDriver = {
   async approveConnection() {
     throw new Error('prompt automation must be implemented before approving real wallet prompts');
+  },
+  async approveSignature() {
+    throw new Error('prompt automation must be implemented before approving real signature prompts');
   }
 };
 
@@ -79,8 +82,19 @@ test('connects through wallet policy', async ({ page, wallet, walletArtifacts })
     click: async () => page.getByRole('button', { name: /connect/i }).click()
   });
 
+  await wallet.switchChain();
   await wallet.expectConnected();
   await wallet.expectChain({ expectedChainId: 11155111 });
+
+  await wallet.signMessage({
+    message: 'Sign in with Example',
+    click: async () => page.getByRole('button', { name: /sign in/i }).click()
+  });
+
+  await wallet.signTypedData({
+    message: JSON.stringify({ domain: { name: 'Example', chainId: 11155111 } }),
+    click: async () => page.getByRole('button', { name: /sign typed data/i }).click()
+  });
 
   const screenshot = await walletArtifacts.screenshot('connected');
   await walletArtifacts.connectedProof('wallet-connected', {
@@ -105,7 +119,7 @@ The proof manifest stores public-oriented metadata: `schemaVersion: 1`, `created
 - `walletConfig`: per-test wallet QA configuration.
 - `walletContext`: browser context under test.
 - `walletPage`: page under test.
-- `wallet`: `connect`, `expectConnected`, `expectChain`, `assertState`, and `maskAddress` helpers.
+- `wallet`: `connect`, `expectConnected`, `expectChain`, `assertState`, `switchChain`, `signMessage`, `signTypedData`, and `maskAddress` helpers.
 - `walletArtifacts`: screenshot, JSON, connected-proof, proof-manifest, and failure-manifest writers.
 
 ## Helpers
@@ -135,7 +149,11 @@ try {
 
 `wallet.connect` requires expected account and chain ID in options or config. It also requires one of `click`, `requestConnection`, `walletConfig.dapp`, or `walletConfig.dappSelectors` to trigger the dapp flow. Prefer `click` for new dapp-owned tests; `requestConnection` remains supported for existing tests.
 
-No prompt approval is implicit. No signature or transaction approval is claimed by this fixture API. Add those only through reviewed app-owned prompt automation and lower-level policy helpers.
+`wallet.switchChain` requires expected account, expected chain ID, and `walletConfig.network` before it calls the lower-level network switch helper. It rejects unsupported or unsafe chain state instead of switching blindly.
+
+`wallet.signMessage` and `wallet.signTypedData` are the supported signature helpers for SIWE/personal-sign and typed-data flows. They require expected account, expected chain ID, origin, expected message text/canonical typed-data JSON, `walletConfig.network`, `walletConfig.prompt`, and a dapp trigger (`click`, `requestSignature`, `walletConfig.dapp.requestSignature`, or `walletConfig.dappSelectors`). The helpers assert wallet state before requesting the dapp signature and then approve only the matching `personal_sign` or `typed_data` prompt.
+
+No prompt approval is implicit. Transaction approval is not exposed by this fixture API yet; add it only after a zero-value or explicit capped-testnet policy exists with rejection tests.
 
 ## CI pattern
 

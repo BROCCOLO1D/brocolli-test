@@ -92,6 +92,9 @@ const origin = 'http://127.0.0.1:5173';
 const promptAutomation: WalletPromptDriver = {
   async approveConnection() {
     throw new Error('configure app-specific prompt automation before enabling real wallet approval');
+  },
+  async approveSignature() {
+    throw new Error('configure app-specific prompt automation before enabling real signature approval');
   }
 };
 
@@ -135,8 +138,15 @@ test('connects with explicit wallet policy', async ({ page, wallet, walletArtifa
     click: async () => page.getByRole('button', { name: /connect/i }).click()
   });
 
+  await wallet.switchChain();
   await wallet.expectConnected();
   await wallet.expectChain({ expectedChainId: 11155111 });
+
+  await wallet.signMessage({
+    message: 'Sign in with Example',
+    click: async () => page.getByRole('button', { name: /sign in/i }).click()
+  });
+
   const screenshot = await walletArtifacts.screenshot('connected');
 
   await walletArtifacts.connectedProof('wallet-connected', {
@@ -151,7 +161,7 @@ test('connects with explicit wallet policy', async ({ page, wallet, walletArtifa
 });
 ```
 
-`useRealWallet` defaults to `false`. When enabled, `wallet.connect` still requires expected account, expected chain, a dapp trigger (`click`, legacy `requestConnection`, `walletConfig.dapp`, or `walletConfig.dappSelectors`), `walletConfig.prompt`, and `walletConfig.network`.
+`useRealWallet` defaults to `false`. When enabled, `wallet.connect`, `wallet.switchChain`, `wallet.signMessage`, and `wallet.signTypedData` still require explicit expected account/chain inputs and configured dapp, prompt, and network drivers. Signature helpers require the expected origin and message/canonical typed-data JSON before they trigger the dapp request or approve a MetaMask prompt. Transaction approval remains intentionally absent until a zero-value or capped-testnet policy is implemented and tested.
 
 ## Lower-level wallet-browser usage
 

@@ -165,6 +165,7 @@ export {
   type WalletDappPageLike,
   type WalletDappPageLocator,
   type WalletPromptDriver,
+  type WalletSignatureKind,
   type WalletSignaturePromptInput,
   type WalletSignatureRequestInput,
   type WalletStateOptions,

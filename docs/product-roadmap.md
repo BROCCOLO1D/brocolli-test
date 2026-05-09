@@ -145,38 +145,35 @@ Acceptance focus:
 - artifacts prove connected provider state and dapp UI state;
 - package logs and test output stay short, JSON-friendly, and redacted.
 
-### 3. Prompt classifier and policy firewall — planned
+### 3. Canonical dapp flow helpers — in progress
 
-Promote prompt handling into reusable classification and decision records.
+Package APIs now cover the common connect/account/chain foundation plus guarded switch-chain and signature flows:
 
-Prompt classes:
+- `wallet.connect()` triggers an app-owned connect action and approves only expected connection prompts;
+- `wallet.expectConnected()`, `wallet.expectChain()`, and `wallet.assertState()` verify provider state;
+- `wallet.switchChain()` delegates to wallet-browser network switching only after expected account/chain and a network driver are configured;
+- `wallet.signMessage()` supports SIWE/personal-sign flows with expected origin, account, chain, message, prompt, and dapp-trigger inputs;
+- `wallet.signTypedData()` supports typed-data flows with expected origin, account, chain, canonical typed-data JSON/message, prompt, and dapp-trigger inputs.
 
-- connect;
-- add/switch network;
-- personal sign;
-- typed-data sign;
-- token approval;
-- contract transaction;
-- value transfer;
-- unknown/dangerous.
+Transaction approval is deliberately still absent until a zero-value or explicitly capped testnet policy is implemented with rejection tests.
 
-Policy behavior:
+Acceptance focus:
 
-- allow connect/network prompts under strict origin + chain rules;
-- reject unknown prompts by default;
-- reject signatures and transactions unless explicitly enabled;
-- emit audit decisions for every prompt.
+- common dapp tests import package helpers instead of recipe/autobrowse scripts;
+- every wallet action has explicit origin/account/chain/policy inputs before approval;
+- wrong-origin, wrong-account, wrong-chain, wrong-message, and unexpected-prompt cases fail before approval;
+- package logs, docs, and proof artifacts stay redacted and free of local paths/secrets.
 
-### 4. Signature QA — planned
+### 4. Prompt classifier and policy firewall — planned
 
-Add safe signature testing after connect QA is stable.
+Promote prompt handling into reusable classification and decision records across connect, add/switch network, personal sign, typed-data sign, token approval, contract transaction, value transfer, and unknown/dangerous states.
 
 Acceptance:
 
-- known fixture message can be approved under policy;
-- wrong origin, wrong domain, wrong chain, or unexpected message is rejected;
-- signature rejection path is asserted in dapp UI;
-- no arbitrary blind signing.
+- allow connect, network, and explicitly requested signature prompts only under strict origin, account, chain, and message rules;
+- reject unknown, token approval, spending cap, and transaction prompts by default;
+- emit audit decisions for every prompt without logging secrets or full local paths;
+- keep typed-data domain/message validation visible to package consumers.
 
 ### 5. Transaction QA — planned
 

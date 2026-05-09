@@ -147,4 +147,88 @@ describe('MetaMask prompt driver', () => {
 
     expect(page.clicks).toEqual(['[data-testid="page-container-footer-next"]']);
   });
+
+  it('approves an origin-matching personal_sign prompt through the explicit signature path', async () => {
+    const page = new FakePromptPage(
+      'chrome-extension://metamaskid/notification.html#personal-sign',
+      'Signature request https://fixture.example wants you to sign this message: Sign in to Fixture'
+    );
+    page.visibleSelectors.add('[data-testid="page-container-footer-next"]');
+    page.visibleSelectors.add('[data-testid="page-container-footer-confirm"]');
+
+    const driver = createMetaMaskPromptDriver({ context: makeContext(page) });
+
+    await driver.approveSignature?.({
+      origin: 'https://fixture.example/sign?session=sensitive-session',
+      expectedAccount: ADDRESS,
+      expectedChainIdHex: '0xaa36a7',
+      message: 'Sign in to Fixture',
+      signatureKind: 'personal_sign'
+    });
+
+    expect(page.clicks).toEqual([
+      '[data-testid="page-container-footer-next"]',
+      '[data-testid="page-container-footer-confirm"]'
+    ]);
+  });
+
+  it('approves an origin-matching typed-data signature prompt only when typed-data markers are present', async () => {
+    const page = new FakePromptPage(
+      'chrome-extension://metamaskid/notification.html#typed-data',
+      'Signature request https://fixture.example requests a typed data signature using eth_signTypedData_v4 Fixture Login'
+    );
+    page.visibleSelectors.add('[data-testid="page-container-footer-confirm"]');
+
+    const driver = createMetaMaskPromptDriver({ context: makeContext(page) });
+
+    await driver.approveSignature?.({
+      origin: 'https://fixture.example',
+      expectedAccount: ADDRESS,
+      expectedChainIdHex: '0xaa36a7',
+      message: 'Fixture Login',
+      signatureKind: 'typed_data'
+    });
+
+    expect(page.clicks).toEqual(['[data-testid="page-container-footer-confirm"]']);
+  });
+
+  it('fails closed without clicking when a signature approval sees a connection prompt', async () => {
+    const page = new FakePromptPage(
+      'chrome-extension://metamaskid/notification.html#connect',
+      'Connect with MetaMask https://fixture.example wants to connect to your account.'
+    );
+    page.visibleSelectors.add('[data-testid="page-container-footer-confirm"]');
+
+    const driver = createMetaMaskPromptDriver({ context: makeContext(page) });
+
+    await expect(driver.approveSignature?.({
+      origin: 'https://fixture.example',
+      expectedAccount: ADDRESS,
+      expectedChainIdHex: '0xaa36a7',
+      message: 'Sign in to Fixture',
+      signatureKind: 'personal_sign'
+    })).rejects.toThrow(/while expecting a signature prompt/i);
+
+    expect(page.clicks).toEqual([]);
+  });
+
+  it('fails closed without clicking when the expected signature message is absent', async () => {
+    const page = new FakePromptPage(
+      'chrome-extension://metamaskid/notification.html#personal-sign',
+      'Signature request https://fixture.example wants you to sign this message: Different message'
+    );
+    page.visibleSelectors.add('[data-testid="page-container-footer-confirm"]');
+
+    const driver = createMetaMaskPromptDriver({ context: makeContext(page) });
+
+    await expect(driver.approveSignature?.({
+      origin: 'https://fixture.example',
+      expectedAccount: ADDRESS,
+      expectedChainIdHex: '0xaa36a7',
+      message: 'Sign in to Fixture',
+      signatureKind: 'personal_sign'
+    })).rejects.toThrow(/expected signature message/i);
+
+    expect(page.clicks).toEqual([]);
+  });
 });

@@ -68,10 +68,13 @@ export interface WalletDappPageDriverOptions {
   selectors: WalletDappPageDriverSelectors;
 }
 
+export type WalletSignatureKind = 'personal_sign' | 'typed_data';
+
 export interface WalletSignatureRequestInput {
   origin?: string;
   expectedAccount: string;
   message?: string;
+  signatureKind: WalletSignatureKind;
 }
 
 export interface WalletTransactionRequestInput {
@@ -88,9 +91,11 @@ export interface WalletConnectionPromptInput {
 }
 
 export interface WalletSignaturePromptInput {
-  origin?: string;
+  origin: string;
   expectedAccount: string;
-  message?: string;
+  expectedChainIdHex: string;
+  message: string;
+  signatureKind: WalletSignatureKind;
 }
 
 export interface WalletTransactionPromptInput {
@@ -134,9 +139,10 @@ export interface ApproveSignatureOptions {
   dapp?: Pick<WalletDappDriver, 'requestSignature'>;
   origin?: string;
   expectedAccount: string;
-  expectedChainId?: string | number;
-  network?: MetaMaskNetworkDriver;
+  expectedChainId: string | number;
+  network: MetaMaskNetworkDriver;
   message?: string;
+  signatureKind: WalletSignatureKind;
   guardrails?: WalletGuardrailConfig;
   logger?: WalletControlLogger;
   metadata?: unknown;
@@ -261,30 +267,43 @@ export async function connectWallet(options: ConnectWalletOptions): Promise<Conn
 
 export async function approveSignature(options: ApproveSignatureOptions): Promise<void> {
   const expectedAccount = normalizeExpectedAccount(options.expectedAccount);
-  const stateConfig = createOptionalWalletStateConfig(options);
-  logWalletControl(options.logger, {
-    action: 'approveSignature',
-    status: 'started',
-    origin: options.origin,
-    chainId: stateConfig?.chainId,
-    chainIdHex: stateConfig?.chainIdHex,
-    account: expectedAccount,
-    decision: 'pending',
-    promptType: 'signature',
-    metadata: options.metadata
-  });
+  let stateConfig: SepoliaNetworkConfig | undefined;
   try {
+    assertExplicitSignatureOrigin(options.origin);
+    assertExplicitSignatureMessage(options.message);
     assertAllowedOrigin(options.origin, options.guardrails);
-    if (stateConfig && options.network) {
-      await assertExpectedChainAndAccount(stateConfig, options.network);
-    }
+    assertExplicitSignatureKind(options.signatureKind);
+    stateConfig = createWalletStateConfig(options);
+    logWalletControl(options.logger, {
+      action: 'approveSignature',
+      status: 'started',
+      origin: options.origin,
+      chainId: stateConfig.chainId,
+      chainIdHex: stateConfig.chainIdHex,
+      account: expectedAccount,
+      decision: 'pending',
+      promptType: 'signature',
+      metadata: options.metadata
+    });
+    await assertExpectedChainAndAccount(stateConfig, options.network);
     if (!options.prompt.approveSignature) {
       throw new Error('MetaMask signature prompt approval is not implemented for the provided prompt driver; fail closed.');
     }
     if (options.dapp?.requestSignature) {
-      await options.dapp.requestSignature({ origin: options.origin, expectedAccount, message: options.message });
+      await options.dapp.requestSignature({
+        origin: options.origin,
+        expectedAccount,
+        message: options.message,
+        signatureKind: options.signatureKind
+      });
     }
-    await options.prompt.approveSignature({ origin: options.origin, expectedAccount, message: options.message });
+    await options.prompt.approveSignature({
+      origin: options.origin,
+      expectedAccount,
+      expectedChainIdHex: stateConfig.chainIdHex,
+      message: options.message,
+      signatureKind: options.signatureKind
+    });
     logWalletControl(options.logger, {
       action: 'approveSignature',
       status: 'prompt-approved',
@@ -533,6 +552,24 @@ function parseTransactionValueWei(value: string | number | bigint | undefined): 
     return BigInt(trimmed);
   }
   throw new Error('Transaction value guardrail must be a non-negative decimal or 0x-prefixed wei amount.');
+}
+
+function assertExplicitSignatureKind(signatureKind: WalletSignatureKind | undefined): asserts signatureKind is WalletSignatureKind {
+  if (signatureKind !== 'personal_sign' && signatureKind !== 'typed_data') {
+    throw new Error('Signature kind is required before approving a wallet signature prompt.');
+  }
+}
+
+function assertExplicitSignatureOrigin(origin: string | undefined): asserts origin is string {
+  if (!origin?.trim()) {
+    throw new Error('Signature origin is required before requesting or approving a wallet signature prompt.');
+  }
+}
+
+function assertExplicitSignatureMessage(message: string | undefined): asserts message is string {
+  if (!message?.trim()) {
+    throw new Error('Expected signature message is required before requesting or approving a wallet signature prompt.');
+  }
 }
 
 function assertAllowedOrigin(origin: string | undefined, guardrails: WalletGuardrailConfig | undefined): void {

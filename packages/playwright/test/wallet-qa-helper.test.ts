@@ -83,6 +83,75 @@ describe('developer-first wallet QA fixture helpers', () => {
     await expect(wallet.expectChain({ expectedChainId: 11155111 })).resolves.toMatchObject({ status: 'verified', chainId: 11155111 });
   });
 
+  it('exposes a switchChain helper that requires explicit expected account and chain', async () => {
+    const calls: string[] = [];
+    let activeChain: string | number = 31337;
+    const wallet = createWalletQa(undefined as any, {
+      expectedAccount: ACCOUNT,
+      expectedChainId: 11155111,
+      network: {
+        async getChainId() { return activeChain; },
+        async getAccounts() { return [ACCOUNT]; },
+        async switchChain(chainIdHex: string) {
+          calls.push(`switch:${chainIdHex}`);
+          activeChain = chainIdHex;
+        },
+        async addEthereumChain() { calls.push('addEthereumChain'); }
+      }
+    });
+
+    await expect(wallet.switchChain()).resolves.toMatchObject({ status: 'verified', activeAccount: ACCOUNT, chainId: 11155111 });
+    expect(calls).toEqual(['switch:0xaa36a7']);
+  });
+
+  it('exposes personal-sign and typed-data helpers with explicit origin/account/chain safety inputs', async () => {
+    const events: string[] = [];
+    const wallet = createWalletQa(undefined as any, {
+      expectedAccount: ACCOUNT,
+      expectedChainId: 11155111,
+      origin: 'https://app.example',
+      dapp: {
+        async requestConnect() {},
+        async getConnectedAccount() { return ACCOUNT; },
+        async requestSignature(input) { events.push(`dapp:${input.signatureKind}:${input.message}`); }
+      },
+      prompt: {
+        async approveSignature(input) { events.push(`prompt:${input.signatureKind}:${input.origin}:${input.expectedAccount}:${input.message}`); }
+      },
+      network: createNetworkStub()
+    });
+
+    await wallet.signMessage({ message: 'Sign in with Ethereum' });
+    await wallet.signTypedData({ message: '{"domain":{"name":"Example"}}' });
+
+    expect(events).toEqual([
+      'dapp:personal_sign:Sign in with Ethereum',
+      `prompt:personal_sign:https://app.example:${ACCOUNT}:Sign in with Ethereum`,
+      'dapp:typed_data:{"domain":{"name":"Example"}}',
+      `prompt:typed_data:https://app.example:${ACCOUNT}:{"domain":{"name":"Example"}}`
+    ]);
+  });
+
+  it('fails closed before requesting a signature when origin or chain/account expectations are missing', async () => {
+    const events: string[] = [];
+    const wallet = createWalletQa(undefined as any, {
+      expectedAccount: ACCOUNT,
+      expectedChainId: 11155111,
+      dapp: {
+        async requestConnect() {},
+        async getConnectedAccount() { return ACCOUNT; },
+        async requestSignature() { events.push('dapp'); }
+      },
+      prompt: {
+        async approveSignature() { events.push('prompt'); }
+      },
+      network: createNetworkStub()
+    });
+
+    await expect(wallet.signMessage({ message: 'Sign in with Ethereum' })).rejects.toThrow(/origin/);
+    expect(events).toEqual([]);
+  });
+
   it('fails closed with actionable missing dapp action and expectation errors', async () => {
     const wallet = createWalletQa(undefined as any, {
       expectedAccount: ACCOUNT,
@@ -183,7 +252,13 @@ describe('fail-closed wallet prompt driver', () => {
       expectedAccount: ACCOUNT,
       expectedChainIdHex: CHAIN_ID_HEX
     })).rejects.toThrow(/not configured.*fail closed/i);
-    await expect(prompt.approveSignature?.({ origin: 'https://app.example', expectedAccount: ACCOUNT })).rejects.toThrow(/unexpected signature prompt/i);
+    await expect(prompt.approveSignature?.({
+      origin: 'https://app.example',
+      expectedAccount: ACCOUNT,
+      expectedChainIdHex: CHAIN_ID_HEX,
+      signatureKind: 'personal_sign',
+      message: 'Sign in to app.example'
+    })).rejects.toThrow(/unexpected signature prompt/i);
     await expect(prompt.approveTransaction?.({ origin: 'https://app.example', expectedAccount: ACCOUNT })).rejects.toThrow(/unexpected transaction prompt/i);
   });
 
