@@ -134,12 +134,30 @@ describe('developer-first wallet QA fixture helpers', () => {
     });
 
     const manifestText = await readFile(manifestPath, 'utf8');
+    const manifest = JSON.parse(manifestText);
+    expect(manifest).toMatchObject({
+      schemaVersion: 1,
+      provenance: {
+        packageName: '@broccolo1d/playwright',
+        framework: 'playwright',
+        tool: 'walletArtifacts.connectedProof'
+      },
+      test: { project: 'chromium', title: 'connects wallet' },
+      summary: { status: 'connected', artifactCount: 1 },
+      checksums: { artifactSha256: [expect.stringMatching(/^[0-9a-f]{64}$/)] }
+    });
+    expect(Date.parse(manifest.createdAt)).not.toBeNaN();
+    expect(manifest.runId).toMatch(/^[a-f0-9-]{36}$/);
     expect(manifestText).toContain('0x1111…1111');
     expect(manifestText).toContain('dapp-connected.json');
     expect(manifestText).not.toContain(ACCOUNT);
     expect(manifestText).not.toContain(artifactDir);
     expect(manifestText).not.toContain('/home/alice');
     await expect(verifyWalletQaProofManifest(artifacts.artifactDir, 'dapp-connected.json')).resolves.toMatchObject({
+      schemaVersion: 1,
+      runId: manifest.runId,
+      manifestSha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+      provenance: { framework: 'playwright', tool: 'walletArtifacts.connectedProof' },
       manifest: { status: 'connected', maskedAccount: '0x1111…1111' }
     });
   });
@@ -208,6 +226,19 @@ describe('wallet QA proof manifests', () => {
     });
 
     const manifestText = await readFile(manifestPath, 'utf8');
+    const manifest = JSON.parse(manifestText);
+    expect(manifest).toMatchObject({
+      schemaVersion: 1,
+      runId: expect.stringMatching(/^[a-f0-9-]{36}$/),
+      provenance: {
+        packageName: '@broccolo1d/playwright',
+        framework: 'playwright',
+        tool: 'writeWalletQaProofManifest'
+      },
+      summary: { status: 'connected', origin: 'https://app.example', maskedAccount: '0x1111…1111', chainId: 11155111, artifactCount: 1 },
+      checksums: { artifactSha256: [expect.stringMatching(/^[0-9a-f]{64}$/)] }
+    });
+    expect(Date.parse(manifest.createdAt)).not.toBeNaN();
     expect(manifestText).not.toContain(artifactDir);
     expect(manifestText).not.toContain(ACCOUNT);
     expect(manifestText).toContain('0x1111…1111');
@@ -217,6 +248,11 @@ describe('wallet QA proof manifests', () => {
 
     await expect(verifyWalletQaProofManifest(artifactDir)).resolves.toMatchObject({
       status: 'verified',
+      schemaVersion: 1,
+      createdAt: manifest.createdAt,
+      runId: manifest.runId,
+      manifestSha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+      provenance: { packageName: '@broccolo1d/playwright', framework: 'playwright' },
       manifest: {
         status: 'connected',
         maskedAccount: '0x1111…1111',
@@ -250,6 +286,95 @@ describe('wallet QA proof manifests', () => {
     }));
 
     await expect(verifyWalletQaProofManifest(artifactDir)).rejects.toThrow(/full wallet address|basename/i);
+
+    await expect(writeWalletQaProofManifest({
+      artifactDir,
+      status: 'connected',
+      origin: 'https://app.example/connect?token=fake#state',
+      account: ACCOUNT,
+      chainId: 11155111,
+      attachments: [{ label: 'wallet-connected', path: screenshot }]
+    })).rejects.toThrow(/origin/i);
+
+    await expect(writeWalletQaProofManifest({
+      artifactDir,
+      status: 'connected',
+      origin: 'https://app.example/nested/path',
+      account: ACCOUNT,
+      chainId: 11155111,
+      attachments: [{ label: 'wallet-connected', path: screenshot }]
+    })).rejects.toThrow(/origin/i);
+  });
+
+  it('rejects tampered provenance summaries and downgraded manifests without schemaVersion', async () => {
+    const artifactDir = await tempArtifactDir();
+    const screenshot = join(artifactDir, 'connected.png');
+    await writeFile(screenshot, 'fake image bytes');
+    const manifestPath = await writeWalletQaProofManifest({
+      artifactDir,
+      status: 'connected',
+      origin: 'https://app.example',
+      account: ACCOUNT,
+      chainId: 11155111,
+      attachments: [{ label: 'wallet-connected', path: screenshot }]
+    });
+
+    const manifest = JSON.parse(await readFile(manifestPath, 'utf8'));
+    manifest.summary.artifactCount = 2;
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+    await expect(verifyWalletQaProofManifest(artifactDir)).rejects.toThrow(/summary/i);
+
+    manifest.summary.artifactCount = 1;
+    manifest.origin = 'https://app.example/callback';
+    manifest.summary.origin = manifest.origin;
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+    await expect(verifyWalletQaProofManifest(artifactDir)).rejects.toThrow(/origin/i);
+
+    manifest.origin = 'https://app.example';
+    manifest.summary.origin = manifest.origin;
+    manifest.provenance.packageVersion = '9.9.9';
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+    await expect(verifyWalletQaProofManifest(artifactDir)).rejects.toThrow(/package version provenance/i);
+
+    manifest.provenance.packageVersion = '0.2.3';
+    manifest.provenance.runtime = { node: 'v0.0.0', platform: process.platform, arch: process.arch };
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+    await expect(verifyWalletQaProofManifest(artifactDir)).rejects.toThrow(/runtime provenance/i);
+
+    manifest.provenance.runtime = { node: process.version, platform: process.platform, arch: process.arch };
+    manifest.maskedAccount = 'not-a-masked-address';
+    manifest.summary.maskedAccount = manifest.maskedAccount;
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+    await expect(verifyWalletQaProofManifest(artifactDir)).rejects.toThrow(/masked account/i);
+
+    manifest.maskedAccount = '0x1111…1111';
+    manifest.summary.maskedAccount = manifest.maskedAccount;
+    delete manifest.schemaVersion;
+    delete manifest.createdAt;
+    delete manifest.runId;
+    delete manifest.provenance;
+    delete manifest.test;
+    delete manifest.summary;
+    delete manifest.checksums;
+    await writeFile(manifestPath, `${JSON.stringify(manifest, null, 2)}\n`, 'utf8');
+    await expect(verifyWalletQaProofManifest(artifactDir)).rejects.toThrow(/schemaVersion/i);
+  });
+
+  it('rejects schema v1 connected proofs without required evidence and artifacts', async () => {
+    const artifactDir = await tempArtifactDir();
+    await writeFile(join(artifactDir, 'wallet-qa-proof.json'), `${JSON.stringify({
+      schemaVersion: 1,
+      artifactType: 'wallet-qa-proof',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      runId: 'empty-connected-proof',
+      provenance: { packageName: '@broccolo1d/playwright', packageVersion: '0.2.3', framework: 'playwright', tool: 'test', runtime: { node: process.version, platform: process.platform, arch: process.arch } },
+      status: 'connected',
+      artifacts: [],
+      summary: { status: 'connected', artifactCount: 0 },
+      checksums: { artifactSha256: [] }
+    }, null, 2)}\n`, 'utf8');
+
+    await expect(verifyWalletQaProofManifest(artifactDir)).rejects.toThrow(/connected proof.*evidence|origin|artifact/i);
   });
 
   it('rejects general local path leaks in public manifest failure details', async () => {
@@ -289,5 +414,19 @@ describe('wallet QA proof manifests', () => {
     expect(formatted).not.toContain(ACCOUNT);
     expect(formatted).not.toContain('/tmp/private');
     expect(redactWalletQaValue({ account: ACCOUNT, nested: [raw.message] })).not.toContain(ACCOUNT);
+    const sensitive = redactWalletQaValue('private key 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa raw 0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb npm_abcdefghijklmnopqrstuvwxyz123456');
+    expect(sensitive).not.toContain('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+    expect(sensitive).not.toContain('bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb');
+    expect(sensitive).not.toContain('npm_abcdefghijklmnopqrstuvwxyz123456');
+
+    const labeled = redactWalletQaValue('seed phrase abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about wallet password hunter2 rpc https://user:secret@example.com/path');
+    expect(labeled).toContain('[redacted:seed-phrase]');
+    expect(labeled).not.toContain('abandon');
+    expect(labeled).not.toContain('hunter2');
+    expect(labeled).not.toContain('user:secret@example.com');
+
+    const endpoint = redactWalletQaValue('endpoint https://sepolia.infura.io/v3/fake-rpc-token-redacted-value');
+    expect(endpoint).toContain('[redacted:rpc-url]');
+    expect(endpoint).not.toContain('fake-rpc-token-redacted-value');
   });
 });

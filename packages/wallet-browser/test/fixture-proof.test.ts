@@ -22,6 +22,16 @@ function writeProofManifest(
 ): void {
   writeFileSync(join(artifactDir, 'fixture-connected.png'), screenshotBytes);
   const manifest = {
+    schemaVersion: 1,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    runId: 'fixture-proof-test-run',
+    provenance: {
+      packageName: '@broccolo1d/wallet-browser',
+      packageVersion: '0.2.3',
+      framework: 'wallet-browser',
+      tool: 'verifyFixtureConnectionProofManifest',
+      runtime: { node: process.version, platform: process.platform, arch: process.arch }
+    },
     artifactType: 'fixture-dapp-wallet-connection-proof',
     target: 'fixture-dapp',
     status: 'connected',
@@ -55,6 +65,17 @@ describe('fixture connection proof manifest verification', () => {
     expect(result).toMatchObject({
       status: 'verified',
       artifactDir,
+      schemaVersion: 1,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      runId: 'fixture-proof-test-run',
+      manifestSha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+      provenance: {
+        packageName: '@broccolo1d/wallet-browser',
+        packageVersion: '0.2.3',
+        framework: 'wallet-browser',
+        tool: 'verifyFixtureConnectionProofManifest',
+        runtime: { node: process.version, platform: process.platform, arch: process.arch }
+      },
       evidence: {
         connectionState: 'connected',
         maskedAccount: '0x8161…4b61',
@@ -64,6 +85,44 @@ describe('fixture connection proof manifest verification', () => {
     });
     expect(result.screenshots).toHaveLength(1);
     expect(result.screenshots[0].file).toBe('fixture-connected.png');
+  });
+
+  it('rejects tampered package and runtime provenance', async () => {
+    const packageVersionDir = await tempArtifactDir();
+    writeProofManifest(packageVersionDir, {
+      provenance: {
+        packageName: '@broccolo1d/wallet-browser',
+        packageVersion: '9.9.9',
+        framework: 'wallet-browser',
+        tool: 'verifyFixtureConnectionProofManifest',
+        runtime: { node: process.version, platform: process.platform, arch: process.arch }
+      }
+    });
+    expect(() => verifyFixtureConnectionProofManifest(packageVersionDir)).toThrow(/package version provenance/i);
+
+    const runtimeDir = await tempArtifactDir();
+    writeProofManifest(runtimeDir, {
+      provenance: {
+        packageName: '@broccolo1d/wallet-browser',
+        packageVersion: '0.2.3',
+        framework: 'wallet-browser',
+        tool: 'verifyFixtureConnectionProofManifest',
+        runtime: { node: 'v0.0.0', platform: process.platform, arch: process.arch }
+      }
+    });
+    expect(() => verifyFixtureConnectionProofManifest(runtimeDir)).toThrow(/runtime provenance/i);
+  });
+
+  it('rejects downgraded manifests without schemaVersion provenance', async () => {
+    const artifactDir = await tempArtifactDir();
+    writeProofManifest(artifactDir, {
+      schemaVersion: undefined,
+      createdAt: undefined,
+      runId: undefined,
+      provenance: undefined
+    });
+
+    expect(() => verifyFixtureConnectionProofManifest(artifactDir)).toThrow(/schemaVersion/i);
   });
 
   it('fails if the proof is still loading, onboarding, or disconnected instead of connected', async () => {
@@ -107,10 +166,14 @@ describe('fixture connection proof manifest verification', () => {
     expect(() => verifyFixtureConnectionProofManifest(wrongChainDir)).toThrow(/Sepolia chain/i);
   });
 
-  it('fails if the manifest contains absolute artifact paths or a tampered screenshot hash', async () => {
+  it('fails if the manifest contains absolute artifact paths, RPC token URLs, or a tampered screenshot hash', async () => {
     const pathLeakDir = await tempArtifactDir();
     writeProofManifest(pathLeakDir, { notes: [`unsafe path ${pathLeakDir}`] });
     expect(() => verifyFixtureConnectionProofManifest(pathLeakDir)).toThrow(/full artifact directory path/i);
+
+    const rpcLeakDir = await tempArtifactDir();
+    writeProofManifest(rpcLeakDir, { notes: ['endpoint https://sepolia.infura.io/v3/fake-rpc-token-redacted-value'] });
+    expect(() => verifyFixtureConnectionProofManifest(rpcLeakDir)).toThrow(/raw secrets or tokens/i);
 
     const tamperedDir = await tempArtifactDir();
     writeProofManifest(tamperedDir, {
@@ -154,5 +217,25 @@ describe('fixture connection proof manifest verification', () => {
     expect(result.evidence).toMatchObject({ connectionState: 'connected', maskedAccount: '0x8161…4b61' });
     expect(output).not.toContain('do-not-print-this-password');
     expect(output).not.toContain(artifactDir);
+  });
+
+  it('rejects fixture proof local path leaks and redacts missing-manifest CLI errors', async () => {
+    const leakDir = await tempArtifactDir();
+    writeProofManifest(leakDir, { notes: ['unsafe /home/alice/secret/profile.json and C:\\Users\\alice\\secret'] });
+    expect(() => verifyFixtureConnectionProofManifest(leakDir)).toThrow(/local path leaks/i);
+
+    const missingDir = await tempArtifactDir();
+    const stdout: string[] = [];
+    const stderr: string[] = [];
+    const exitCode = await runWalletBrowserCli({
+      argv: ['verify-fixture-proof', missingDir],
+      stdout: (message) => stdout.push(message),
+      stderr: (message) => stderr.push(message)
+    });
+
+    expect(exitCode).toBe(1);
+    expect(stdout).toEqual([]);
+    expect(stderr.join('')).not.toContain(missingDir);
+    expect(stderr.join('')).toMatch(/fixture proof verification failed/i);
   });
 });

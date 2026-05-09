@@ -175,8 +175,8 @@ export async function runWalletBrowserCli(options: WalletBrowserCliOptions = {})
       const publicResult = { ...result, artifactDir: '[redacted:artifact-dir]', manifestPath: '[redacted:manifest-path]' };
       stdout(`${JSON.stringify(publicResult, null, 2)}\n`);
       return 0;
-    } catch (error) {
-      stderr(`${error instanceof Error ? error.message : String(error)}\n`);
+    } catch {
+      stderr('Fixture proof verification failed. Inspect local artifacts for details.\n');
       return 1;
     }
   }

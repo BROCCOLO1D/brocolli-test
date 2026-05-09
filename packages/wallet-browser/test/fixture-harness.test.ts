@@ -72,7 +72,8 @@ describe('fixture connection proof harness', () => {
       captureScreenshot: async ({ path, evidence }) => {
         calls.push(`screenshot:${evidence.connectionState}:${evidence.maskedAccount}`);
         await import('node:fs/promises').then(({ writeFile }) => writeFile(path, 'connected fixture screenshot bytes'));
-      }
+      },
+      notes: ['private key 0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa npm_abcdefghijklmnopqrstuvwxyz123456']
     });
 
     expect(calls).toEqual([
@@ -95,6 +96,20 @@ describe('fixture connection proof harness', () => {
     expect(manifestText).not.toContain(ADDRESS);
     expect(manifestText).not.toContain('do-not-log');
     expect(manifestText).not.toContain(artifactDir);
+    expect(manifestText).not.toContain('aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+    expect(manifestText).not.toContain('npm_abcdefghijklmnopqrstuvwxyz123456');
+    const manifest = JSON.parse(manifestText);
+    expect(manifest).toMatchObject({
+      schemaVersion: 1,
+      artifactType: 'fixture-dapp-wallet-connection-proof',
+      createdAt: expect.stringMatching(/^\d{4}-\d{2}-\d{2}T/),
+      runId: expect.stringMatching(/^fixture-connection-proof-/),
+      provenance: {
+        packageName: '@broccolo1d/wallet-browser',
+        framework: 'wallet-browser',
+        tool: 'runFixtureConnectionProof'
+      }
+    });
   });
 
   it('fails closed before screenshot capture when the fixture connects the wrong account', async () => {
