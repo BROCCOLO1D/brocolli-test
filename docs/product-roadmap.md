@@ -4,8 +4,8 @@
 
 The product line is now public package oriented:
 
-- `@broccolo1d/wallet-browser@0.2.4` — core browser-wallet runtime, guardrails, CLI, and artifact helpers.
-- `@broccolo1d/playwright@0.2.4` — Playwright fixtures for downstream dapp QA suites.
+- `@broccolo1d/wallet-browser@0.2.5` — core browser-wallet runtime, guardrails, CLI, and artifact helpers.
+- `@broccolo1d/playwright@0.2.5` — Playwright fixtures for downstream dapp QA suites.
 
 Target-specific scripts are not the product. Downstream apps own selectors, routes, modal behavior, assertions, and test data. These packages own wallet runtime primitives, policy boundaries, and verification contracts.
 
@@ -35,8 +35,8 @@ The harness should make those answers repeatable for humans, CI, and agents with
 ### Importable packages
 
 ```bash
-pnpm add -D @broccolo1d/playwright@0.2.4 @playwright/test
-pnpm add -D @broccolo1d/wallet-browser@0.2.4 playwright
+pnpm add -D @broccolo1d/playwright@0.2.5 @playwright/test
+pnpm add -D @broccolo1d/wallet-browser@0.2.5 playwright
 ```
 
 ### Playwright fixture layer
@@ -123,7 +123,7 @@ The artifact contract is local-first:
 - verifier output usable in CI without relaunching a browser;
 - rejection of full addresses and absolute local paths in public proof manifests.
 
-Milestone 3 proof artifact upgrade is implemented in `0.2.4`: Playwright proof manifests now emit required schema/provenance fields and verifier-friendly summaries/checksums, verifiers return manifest digests and provenance, fixture proof verification validates schema v1 provenance, and downgraded manifests without `schemaVersion` are rejected.
+Milestone 3 proof artifact upgrade is implemented in `0.2.5`: Playwright proof manifests now emit required schema/provenance fields and verifier-friendly summaries/checksums, verifiers return manifest digests and provenance, fixture proof verification validates schema v1 provenance, and downgraded manifests without `schemaVersion` are rejected.
 
 ## Product milestones
 

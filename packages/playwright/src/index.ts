@@ -236,7 +236,7 @@ const DEFAULT_WALLET_CONFIG: WalletQaConfig = {
   useRealWallet: false,
   artifactDir: '.wallet-artifacts/playwright'
 };
-const PLAYWRIGHT_PACKAGE_VERSION = '0.2.4';
+const PLAYWRIGHT_PACKAGE_VERSION = '0.2.5';
 
 function runtimeMetadata(): WalletQaProofRuntimeMetadata {
   return { node: process.version, platform: process.platform, arch: process.arch };
