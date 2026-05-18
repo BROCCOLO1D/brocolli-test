@@ -83,6 +83,15 @@ export interface FailClosedWalletPromptDriverOptions {
   delegate?: WalletPromptDriver;
 }
 
+export interface DeterministicInjectedWalletOptions {
+  /** Public test wallet account exposed by the injected EIP-1193 provider. Must be a non-zero 0x address. */
+  account: string;
+  /** Chain id exposed by eth_chainId/net_version. */
+  chainId: number | string;
+}
+
+export type DeterministicInjectedWalletPage = Pick<Page, 'addInitScript'>;
+
 export interface WalletAssertStateOptions {
   expectedAccount?: string;
   expectedChainId?: string | number;
@@ -237,6 +246,33 @@ const DEFAULT_WALLET_CONFIG: WalletQaConfig = {
   artifactDir: '.wallet-artifacts/playwright'
 };
 const PLAYWRIGHT_PACKAGE_VERSION = '0.2.5';
+const ETHEREUM_ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
+const ZERO_ETHEREUM_ADDRESS = '0x0000000000000000000000000000000000000000';
+
+function normalizeNonZeroEthereumAddress(account: string): string {
+  const normalized = account.toLowerCase();
+  if (!ETHEREUM_ADDRESS_PATTERN.test(normalized) || normalized === ZERO_ETHEREUM_ADDRESS) {
+    throw new Error('Deterministic injected wallet account must be a non-zero Ethereum address.');
+  }
+  return normalized;
+}
+
+function normalizeChainIdHex(chainId: string | number): string {
+  if (typeof chainId === 'number') {
+    if (!Number.isInteger(chainId) || chainId <= 0) {
+      throw new Error('Deterministic injected wallet chainId must be a positive integer or 0x-prefixed hex string.');
+    }
+    return `0x${chainId.toString(16)}`;
+  }
+
+  if (/^0x[0-9a-fA-F]+$/.test(chainId)) {
+    return `0x${Number.parseInt(chainId, 16).toString(16)}`;
+  }
+  if (/^[0-9]+$/.test(chainId)) {
+    return normalizeChainIdHex(Number.parseInt(chainId, 10));
+  }
+  throw new Error('Deterministic injected wallet chainId must be a positive integer or 0x-prefixed hex string.');
+}
 
 function runtimeMetadata(): WalletQaProofRuntimeMetadata {
   return { node: process.version, platform: process.platform, arch: process.arch };
@@ -244,6 +280,68 @@ function runtimeMetadata(): WalletQaProofRuntimeMetadata {
 
 export function defineWalletQaConfig(config: WalletQaPlaywrightConfig): WalletQaPlaywrightConfig {
   return defineConfig(config) as WalletQaPlaywrightConfig;
+}
+
+export async function installDeterministicInjectedWallet(
+  page: DeterministicInjectedWalletPage,
+  options: DeterministicInjectedWalletOptions
+): Promise<void> {
+  const account = normalizeNonZeroEthereumAddress(options.account);
+  const chainIdHex = normalizeChainIdHex(options.chainId);
+
+  await page.addInitScript(({ account: injectedAccount, chainIdHex: injectedChainIdHex }) => {
+    const listeners = new Map<string, Set<(payload: unknown) => void>>();
+    const emit = (event: string, payload: unknown) => {
+      for (const listener of listeners.get(event) ?? []) listener(payload);
+    };
+    const networkVersion = Number.parseInt(injectedChainIdHex, 16).toString();
+    const provider = {
+      isMetaMask: true,
+      selectedAddress: injectedAccount,
+      chainId: injectedChainIdHex,
+      networkVersion,
+      async request({ method, params }: { method: string; params?: Array<{ chainId?: string }> }) {
+        switch (method) {
+          case 'eth_requestAccounts':
+          case 'eth_accounts':
+            provider.selectedAddress = injectedAccount;
+            emit('accountsChanged', [injectedAccount]);
+            return [injectedAccount];
+          case 'eth_chainId':
+            return injectedChainIdHex;
+          case 'net_version':
+            return networkVersion;
+          case 'wallet_switchEthereumChain': {
+            const requestedChainId = params?.[0]?.chainId?.toLowerCase();
+            if (requestedChainId && requestedChainId !== injectedChainIdHex) {
+              const error = new Error(`Deterministic injected wallet only supports chain ${injectedChainIdHex}.`);
+              (error as Error & { code?: number }).code = 4902;
+              throw error;
+            }
+            provider.chainId = injectedChainIdHex;
+            emit('chainChanged', injectedChainIdHex);
+            return null;
+          }
+          case 'wallet_addEthereumChain':
+            return null;
+          default:
+            throw new Error(`Unsupported deterministic injected wallet method: ${method}`);
+        }
+      },
+      on(event: string, listener: (payload: unknown) => void) {
+        if (!listeners.has(event)) listeners.set(event, new Set());
+        listeners.get(event)?.add(listener);
+      },
+      removeListener(event: string, listener: (payload: unknown) => void) {
+        listeners.get(event)?.delete(listener);
+      }
+    };
+
+    Object.defineProperty(globalThis, 'ethereum', {
+      configurable: true,
+      value: provider
+    });
+  }, { account, chainIdHex });
 }
 
 export const test = base.extend<WalletQaFixtures, WalletQaWorkerFixtures>({

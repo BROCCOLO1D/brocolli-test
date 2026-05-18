@@ -125,6 +125,7 @@ The proof manifest stores public-oriented metadata: `schemaVersion: 1`, `created
 ## Helpers
 
 - `defineWalletQaConfig(config)`: typed Playwright config wrapper for wallet QA fixtures.
+- `installDeterministicInjectedWallet(page, { account, chainId })`: installs a minimal deterministic EIP-1193 provider with a non-zero public test account, `eth_accounts`/`eth_requestAccounts`, `eth_chainId`/`net_version`, and guarded chain-switch responses. Use this for dapp-owned smoke/proof tests that should verify connected UI without real private wallet material.
 - `createFailClosedWalletPromptDriver(options)`: wraps explicit prompt automation and rejects missing handlers, missing/wrong origin, wrong account, or wrong chain.
 - `writeWalletQaProofManifest(options)`: writes a public schema v1 proof manifest with safe attachment metadata, provenance, summaries, checksums, and redacted failures.
 - `verifyWalletQaProofManifest(artifactDir)`: verifies manifest shape, required schema v1 provenance, summary/checksum consistency, attachment hashes/sizes, and rejects full addresses, raw secrets/RPC tokens, local path leaks, and downgraded manifests without `schemaVersion`.
