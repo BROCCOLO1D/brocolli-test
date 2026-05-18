@@ -5,7 +5,7 @@ import { basename, join } from 'node:path';
 import { DEFAULT_SEPOLIA_CHAIN_ID } from './network.js';
 
 export const FIXTURE_CONNECTION_PROOF_MANIFEST = 'FIXTURE-PROOF-MANIFEST.json';
-const WALLET_BROWSER_PACKAGE_VERSION = '0.2.6';
+const WALLET_BROWSER_PACKAGE_VERSION = '0.2.8';
 
 function runtimeMetadata(): NonNullable<FixtureConnectionProofManifest['provenance']>['runtime'] {
   return { node: process.version, platform: process.platform, arch: process.arch };
