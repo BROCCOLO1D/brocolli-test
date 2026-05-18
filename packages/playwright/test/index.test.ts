@@ -5,8 +5,8 @@ import { defineWalletQaConfig, installDeterministicInjectedWallet, test } from '
 import type { DeterministicInjectedWalletPage } from '../src/index.js';
 
 describe('@broccolo1d/playwright exports', () => {
-  it('declares the wallet-browser workspace dependency that pnpm publish rewrites for consumers', () => {
-    expect(packageJson.dependencies['@broccolo1d/wallet-browser']).toBe('workspace:^');
+  it('declares a registry-safe wallet-browser dependency for plain npm publish', () => {
+    expect(packageJson.dependencies['@broccolo1d/wallet-browser']).toBe('^0.2.8');
   });
 
   it('exports an extended Playwright test and config helper', () => {

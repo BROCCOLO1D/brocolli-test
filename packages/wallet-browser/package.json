@@ -1,6 +1,6 @@
 {
   "name": "@broccolo1d/wallet-browser",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "description": "Core browser-wallet runtime, guardrails, CLI, and artifact helpers for dapp QA.",
   "private": false,
   "type": "module",
