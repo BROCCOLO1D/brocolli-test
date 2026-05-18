@@ -1,6 +1,6 @@
 {
   "name": "@broccolo1d/playwright",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "Playwright fixtures for policy-gated browser-wallet dapp QA.",
   "private": false,
   "type": "module",

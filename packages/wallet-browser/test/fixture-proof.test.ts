@@ -27,7 +27,7 @@ function writeProofManifest(
     runId: 'fixture-proof-test-run',
     provenance: {
       packageName: '@broccolo1d/wallet-browser',
-      packageVersion: '0.2.5',
+      packageVersion: '0.2.6',
       framework: 'wallet-browser',
       tool: 'verifyFixtureConnectionProofManifest',
       runtime: { node: process.version, platform: process.platform, arch: process.arch }
@@ -71,7 +71,7 @@ describe('fixture connection proof manifest verification', () => {
       manifestSha256: expect.stringMatching(/^[0-9a-f]{64}$/),
       provenance: {
         packageName: '@broccolo1d/wallet-browser',
-        packageVersion: '0.2.5',
+        packageVersion: '0.2.6',
         framework: 'wallet-browser',
         tool: 'verifyFixtureConnectionProofManifest',
         runtime: { node: process.version, platform: process.platform, arch: process.arch }
@@ -104,7 +104,7 @@ describe('fixture connection proof manifest verification', () => {
     writeProofManifest(runtimeDir, {
       provenance: {
         packageName: '@broccolo1d/wallet-browser',
-        packageVersion: '0.2.5',
+        packageVersion: '0.2.6',
         framework: 'wallet-browser',
         tool: 'verifyFixtureConnectionProofManifest',
         runtime: { node: 'v0.0.0', platform: process.platform, arch: process.arch }

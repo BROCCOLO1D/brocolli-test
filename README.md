@@ -42,8 +42,8 @@ test('wallet connects on Sepolia', async ({ page, wallet, walletArtifacts }) => 
 
 | Package | Version | Purpose |
 | --- | ---: | --- |
-| [`@broccolo1d/wallet-browser`](packages/wallet-browser/README.md) | `0.2.5` | Core browser automation for MetaMask integration with Chromium context management and wallet state verification. |
-| [`@broccolo1d/playwright`](packages/playwright/README.md) | `0.2.5` | Playwright test fixtures and utilities for wallet-integrated dapp testing with structured proof artifacts. |
+| [`@broccolo1d/wallet-browser`](packages/wallet-browser/README.md) | `0.2.6` | Core browser automation for MetaMask integration with Chromium context management and wallet state verification. |
+| [`@broccolo1d/playwright`](packages/playwright/README.md) | `0.2.6` | Playwright test fixtures and utilities for wallet-integrated dapp testing with structured proof artifacts. |
 
 
 ## Runtime model
