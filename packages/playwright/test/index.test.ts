@@ -1,9 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
+import packageJson from '../package.json';
 import { defineWalletQaConfig, installDeterministicInjectedWallet, test } from '../src/index.js';
 import type { DeterministicInjectedWalletPage } from '../src/index.js';
 
 describe('@broccolo1d/playwright exports', () => {
+  it('declares the wallet-browser workspace dependency that pnpm publish rewrites for consumers', () => {
+    expect(packageJson.dependencies['@broccolo1d/wallet-browser']).toBe('workspace:^');
+  });
+
   it('exports an extended Playwright test and config helper', () => {
     expect(typeof test).toBe('function');
     expect(typeof test.extend).toBe('function');
