@@ -391,6 +391,62 @@ describe('wallet QA proof manifests', () => {
     expect(indexText).not.toContain(ACCOUNT);
   });
 
+  it('records redacted prompt and action decisions in proof manifests', async () => {
+    const artifactDir = await tempArtifactDir();
+    const screenshot = join(artifactDir, 'connected.png');
+    await writeFile(screenshot, 'fake image bytes');
+
+    const manifestPath = await writeWalletQaProofManifest({
+      artifactDir,
+      status: 'connected',
+      origin: 'https://app.example',
+      account: ACCOUNT,
+      chainId: 11155111,
+      attachments: [{ label: 'wallet-connected', path: screenshot }],
+      decisions: [
+        {
+          kind: 'prompt',
+          action: 'connect',
+          decision: 'approved',
+          promptKind: 'connect',
+          origin: 'https://app.example',
+          reason: `Prompt matched ${ACCOUNT} without profile /home/alice/wallet/profile`
+        },
+        {
+          kind: 'action',
+          action: 'artifact-review',
+          decision: 'observed',
+          reason: 'Screenshot reviewed before README promotion'
+        }
+      ]
+    });
+
+    const manifestText = await readFile(manifestPath, 'utf8');
+    const manifest = JSON.parse(manifestText);
+    expect(manifest.summary).toMatchObject({ status: 'connected', artifactCount: 1, decisionCount: 2 });
+    expect(manifest.decisions).toEqual([
+      {
+        kind: 'prompt',
+        action: 'connect',
+        decision: 'approved',
+        promptKind: 'connect',
+        origin: 'https://app.example',
+        reason: 'Prompt matched 0x1111…1111 without profile [path]/profile'
+      },
+      {
+        kind: 'action',
+        action: 'artifact-review',
+        decision: 'observed',
+        reason: 'Screenshot reviewed before README promotion'
+      }
+    ]);
+    expect(manifestText).not.toContain(ACCOUNT);
+    expect(manifestText).not.toContain('/home/alice');
+    await expect(verifyWalletQaProofManifest(artifactDir)).resolves.toMatchObject({
+      manifest: { summary: { decisionCount: 2 }, decisions: [{ promptKind: 'connect' }, { action: 'artifact-review' }] }
+    });
+  });
+
   it('writes and verifies public manifests with basename, sha256, and size only', async () => {
     const artifactDir = await tempArtifactDir();
     const screenshot = join(artifactDir, 'connected.png');
