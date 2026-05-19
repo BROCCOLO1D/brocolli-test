@@ -117,6 +117,8 @@ Never commit `.env`, wallet profiles, extension bundles, traces, screenshots, vi
 
 ## Smoke and artifact verification
 
+For app-level README evidence, use the Playwright package to write proof manifests and artifact indexes after the dapp has driven its own UI. Wildcat is the reference: CI-safe smoke tests cover the local app shell without secrets, while connected Sepolia screenshots are promoted only from a private-key-backed MetaMask proof after manual review.
+
 ```bash
 # Real browser smoke: local burner/testnet config only.
 xvfb-run -a pnpm exec wallet-browser smoke-metamask

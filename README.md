@@ -1,6 +1,6 @@
 # brocolli-test
 
-brocolli-test is a two-package workspace for wallet-backed dapp QA.
+`brocolli-test` is a two-package workspace for wallet-backed dapp QA. It packages the browser-wallet runtime and the Playwright fixtures used by downstream apps such as Broccoli Control and Wildcat.
 
 ```text
 @broccolo1d/playwright
@@ -9,21 +9,26 @@ brocolli-test is a two-package workspace for wallet-backed dapp QA.
             └─ loads an unpacked MetaMask extension from ignored local storage
 ```
 
+## What it gives a dapp team
 
-## TLDR
+- Policy-gated wallet actions for connect, chain checks, and signatures.
+- Deterministic injected-wallet smoke tests for CI-safe app coverage.
+- Optional private-key-backed MetaMask flows for local/testnet proof capture.
+- Public-safe proof manifests, screenshots, and artifact indexes for review.
+- Fail-closed prompt/network guards so unknown prompts are not clicked by default.
 
-Lets you do stuff like:
+## Quick example
+
 ```ts
-import { test } from '@broccolo1d/playwright';
+import { expect, test, verifyWalletQaProofManifest } from '@broccolo1d/playwright';
 
 test('wallet connects on Sepolia', async ({ page, wallet, walletArtifacts }) => {
   await page.goto('http://127.0.0.1:5173');
-  
-  // Your test drives the dapp UI; configured wallet drivers approve only expected prompts.
+
   const result = await wallet.connect({
     click: async () => page.getByRole('button', { name: /connect/i }).click()
   });
-  
+
   await wallet.expectConnected();
   await wallet.expectChain({ expectedChainId: 11155111 });
 
@@ -34,9 +39,63 @@ test('wallet connects on Sepolia', async ({ page, wallet, walletArtifacts }) => 
     chainId: result.chainId,
     attachments: [{ label: 'dapp-connected', path: screenshot, contentType: 'image/png' }]
   });
+
+  await verifyWalletQaProofManifest(walletArtifacts.artifactDir, 'wallet-connected.json');
+  await walletArtifacts.writeArtifactIndex({ manifestNames: ['wallet-connected.json'] });
+  await expect(page.getByText(/connected/i)).toBeVisible();
 });
 ```
 
+## Wildcat reference workflow
+
+Wildcat is the product-shaped reference for the package surface: a real Next.js dapp, Sepolia target wiring, app-shell smoke tests, optional private-key-backed MetaMask proof capture, and reviewed README screenshots.
+
+### CI-safe Wildcat smoke
+
+Use this shape when a production dapp needs app-shell coverage without loading private wallet material. It verifies that `/lender` renders on Sepolia, avoids locale middleware loops, exposes a connect affordance, and writes baseline artifacts.
+
+```bash
+NEXT_PUBLIC_TARGET_NETWORK=Sepolia \
+NEXT_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/test-alchemy-key \
+NEXT_PUBLIC_API_URL=https://api.wildcat.finance \
+NEXT_PUBLIC_TOKENS_LIST_URL=https://tokens.1inch.eth.link \
+NEXT_PUBLIC_TOKENS_IMG_HOSTNAME=tokens.1inch.io \
+WILDCAT_WALLET_QA_RUN_APP=1 \
+npm run test:wallet -- --grep "loads local lender shell"
+```
+
+### Connected-wallet Wildcat proof
+
+Connected-wallet evidence is intentionally stricter. It must use a private-key-env-var backed Sepolia test wallet / MetaMask flow from ignored local config or CI secrets. Public-address-only injected-wallet screenshots are not positive evidence for Wildcat.
+
+```bash
+chmod 600 .env
+set -a && . ./.env && set +a
+NEXT_PUBLIC_TARGET_NETWORK=Sepolia npm run test:wallet:real-metamask
+```
+
+A publishable Wildcat proof should promote only reviewed files into stable docs paths, for example:
+
+```text
+docs/screenshots/wildcat-connected-sepolia-test-wallet.png
+docs/screenshots/wildcat-connected-sepolia-test-wallet-proof.json
+```
+
+The screenshot should show the local Wildcat app with a connected deterministic Sepolia test wallet and visible network/account UI. No-wallet home pages, connect dialogs, blank pages, public-address-only injected-provider state, and raw `.wallet-artifacts` output are not acceptable as final README evidence.
+
+## Artifact index pattern
+
+After writing one or more proof manifests, write an index so CI and review agents can find public-safe evidence without scraping the whole Playwright output directory:
+
+```ts
+await verifyWalletQaProofManifest(walletArtifacts.artifactDir, 'wallet-connected.json');
+await walletArtifacts.writeArtifactIndex({
+  manifestNames: ['wallet-connected.json'],
+  outputName: 'wallet-qa-artifact-index.json'
+});
+```
+
+The index records manifest digests, masked account/chain/origin summaries, attachment basenames, hashes, and verification status. Upload it with reviewed screenshots and proof manifests; keep traces, raw videos, MetaMask profiles, extension bundles, and `.env` files out of git.
 
 ## Packages
 
@@ -44,7 +103,6 @@ test('wallet connects on Sepolia', async ({ page, wallet, walletArtifacts }) => 
 | --- | ---: | --- |
 | [`@broccolo1d/wallet-browser`](packages/wallet-browser/README.md) | `0.2.9` | Core browser automation for MetaMask integration with Chromium context management and wallet state verification. |
 | [`@broccolo1d/playwright`](packages/playwright/README.md) | `0.2.9` | Playwright test fixtures and utilities for wallet-integrated dapp testing with structured proof artifacts. |
-
 
 ## Runtime model
 
@@ -54,7 +112,6 @@ test('wallet connects on Sepolia', async ({ page, wallet, walletArtifacts }) => 
 4. Wallet prompt drivers validate expected prompt text and policy before clicking.
 5. Network drivers assert account and chain state.
 6. Artifacts are written under ignored local directories and verified before sharing.
-
 
 ## Install in a dapp test repo
 
@@ -72,7 +129,7 @@ pnpm add -D @broccolo1d/wallet-browser playwright
 
 Both packages are ESM-only and require Node.js `>=22 <23`.
 
-## Playwright usage
+## Playwright configuration
 
 ```ts
 // playwright.config.ts
@@ -88,7 +145,6 @@ if (!expectedAccount) throw new Error('SEPOLIA_WALLET_ADDRESS is required for wa
 
 const origin = 'http://127.0.0.1:5173';
 
-// Supply real, reviewed prompt automation in jobs that approve wallet UI.
 const promptAutomation: WalletPromptDriver = {
   async approveConnection() {
     throw new Error('configure app-specific prompt automation before enabling real wallet approval');
@@ -127,40 +183,6 @@ export default defineWalletQaConfig({
 });
 ```
 
-```ts
-// tests/wallet.spec.ts
-import { expect, test, verifyWalletQaProofManifest } from '@broccolo1d/playwright';
-
-test('connects with explicit wallet policy', async ({ page, wallet, walletArtifacts }) => {
-  await page.goto('http://127.0.0.1:5173');
-
-  const result = await wallet.connect({
-    click: async () => page.getByRole('button', { name: /connect/i }).click()
-  });
-
-  await wallet.switchChain();
-  await wallet.expectConnected();
-  await wallet.expectChain({ expectedChainId: 11155111 });
-
-  await wallet.signMessage({
-    message: 'Sign in with Example',
-    click: async () => page.getByRole('button', { name: /sign in/i }).click()
-  });
-
-  const screenshot = await walletArtifacts.screenshot('connected');
-
-  await walletArtifacts.connectedProof('wallet-connected', {
-    origin: 'http://127.0.0.1:5173',
-    account: result.activeAccount,
-    chainId: result.chainId,
-    attachments: [{ label: 'dapp-connected', path: screenshot, contentType: 'image/png' }]
-  });
-
-  await verifyWalletQaProofManifest(walletArtifacts.artifactDir, 'wallet-connected.json');
-  await expect(page.getByText(/connected/i)).toBeVisible();
-});
-```
-
 `useRealWallet` defaults to `false`. When enabled, `wallet.connect`, `wallet.switchChain`, `wallet.signMessage`, and `wallet.signTypedData` still require explicit expected account/chain inputs and configured dapp, prompt, and network drivers. Signature helpers require the expected origin and message/canonical typed-data JSON before they trigger the dapp request or approve a MetaMask prompt. Transaction approval remains intentionally absent until a zero-value or capped-testnet policy is implemented and tested.
 
 ## Lower-level wallet-browser usage
@@ -195,7 +217,6 @@ try {
 ```
 
 Prefer package APIs from tests. Use the CLI for local setup, smoke capture, and verification.
- 
 
 ## CLI examples
 
