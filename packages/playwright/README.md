@@ -102,6 +102,11 @@ test('connects through wallet policy', async ({ page, wallet, walletArtifacts })
     account: result.activeAccount,
     chainId: result.chainId,
     attachments: [{ label: 'dapp-connected', path: screenshot, contentType: 'image/png' }],
+    decisions: [
+      { kind: 'prompt', action: 'connect', decision: 'approved', promptKind: 'connect', origin: 'http://127.0.0.1:5173' },
+      { kind: 'prompt', action: 'sign-message', decision: 'approved', promptKind: 'sign' },
+      { kind: 'action', action: 'artifact-review', decision: 'observed', reason: 'Screenshot reviewed before promotion' }
+    ],
     notes: ['connect-only wallet QA proof']
   });
 
@@ -123,7 +128,9 @@ test('connects through wallet policy', async ({ page, wallet, walletArtifacts })
 });
 ```
 
-The proof manifest stores public-oriented metadata: `schemaVersion: 1`, `createdAt`, `runId`, package/framework/tool provenance, optional Playwright project/title metadata, attachment basenames, sha256 hashes, sizes, masked account, safe origin, chain ID, redacted failure text, verifier-friendly `summary`, and artifact checksum lists. It intentionally does not store full local paths, full wallet addresses, raw query/hash origins, or raw secrets.
+The proof manifest stores public-oriented metadata: `schemaVersion: 1`, `createdAt`, `runId`, package/framework/tool provenance, optional Playwright project/title metadata, attachment basenames, sha256 hashes, sizes, masked account, safe origin, chain ID, redacted prompt/action `decisions`, redacted failure text, verifier-friendly `summary`, and artifact checksum lists. It intentionally does not store full local paths, full wallet addresses, raw query/hash origins, or raw secrets.
+
+Decision records are optional, but they make CI evidence easier to review. Use `{ kind: 'prompt', action, decision, promptKind, origin, reason }` for wallet prompt classifier/policy decisions and `{ kind: 'action', action, decision, reason }` for surrounding proof actions such as artifact review. Public decisions allow only `approved`, `rejected`, `skipped`, or `observed`; reasons are redacted with the same address/path/secret filters as failures.
 
 `verifyWalletQaProofManifest()` returns the parsed manifest plus verifier-side provenance (`schemaVersion`, `createdAt`, `runId`, `provenance`) and a `manifestSha256` digest computed from the manifest file. The digest is intentionally returned by the verifier instead of embedded in the manifest to avoid self-hashing ambiguity. Manifests must include schema v1 provenance; downgraded manifests without `schemaVersion` are rejected.
 
@@ -175,7 +182,7 @@ Positive connected-wallet evidence must show the app running locally on the requ
 - `defineWalletQaConfig(config)`: typed Playwright config wrapper for wallet QA fixtures.
 - `installDeterministicInjectedWallet(page, { account, chainId })`: installs a minimal deterministic EIP-1193 provider with a non-zero public test account, `eth_accounts`/`eth_requestAccounts`, `eth_chainId`/`net_version`, and guarded chain-switch responses. Use this for dapp-owned smoke/proof tests that should verify connected UI without real private wallet material.
 - `createFailClosedWalletPromptDriver(options)`: wraps explicit prompt automation and rejects missing handlers, missing/wrong origin, wrong account, or wrong chain.
-- `writeWalletQaProofManifest(options)`: writes a public schema v1 proof manifest with safe attachment metadata, provenance, summaries, checksums, and redacted failures.
+- `writeWalletQaProofManifest(options)`: writes a public schema v1 proof manifest with safe attachment metadata, provenance, summaries, checksums, optional prompt/action decisions, and redacted failures.
 - `verifyWalletQaProofManifest(artifactDir)`: verifies manifest shape, required schema v1 provenance, summary/checksum consistency, attachment hashes/sizes, and rejects full addresses, raw secrets/RPC tokens, local path leaks, and downgraded manifests without `schemaVersion`.
 - `writeWalletQaArtifactIndex({ artifactDir, manifestNames })`: verifies the listed proof manifests and writes a public-safe `wallet-qa-artifact-index.json` for CI uploads/review.
 - `createWalletQaArtifactAnnotation(options)` / `annotateWalletQaArtifact(testInfo, options)`: build and push stable Playwright annotations (`wallet-qa:proof-manifest`, `wallet-qa:artifact-index`, etc.) with safe artifact basenames and redacted descriptions.

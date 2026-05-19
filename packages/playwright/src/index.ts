@@ -166,8 +166,28 @@ export interface WalletQaProofManifest {
   artifacts: WalletQaProofArtifact[];
   failure?: string;
   notes?: string[];
+  decisions?: WalletQaProofDecisionRecord[];
   summary?: WalletQaProofSummary;
   checksums?: WalletQaProofChecksums;
+}
+
+export type WalletQaProofDecisionKind = 'prompt' | 'action';
+
+export type WalletQaProofDecision = 'approved' | 'rejected' | 'skipped' | 'observed';
+
+export interface WalletQaProofDecisionRecord {
+  /** Whether the record describes a wallet prompt decision or a surrounding QA action. */
+  kind: WalletQaProofDecisionKind;
+  /** Short public-safe action label, for example connect, switch-chain, or artifact-review. */
+  action: string;
+  /** Public-safe decision outcome. */
+  decision: WalletQaProofDecision;
+  /** Optional prompt classifier kind, for example connect, sign, transaction, or unknown. */
+  promptKind?: string;
+  /** Optional dapp origin associated with the decision. */
+  origin?: string;
+  /** Optional public note. Full addresses, local paths, and secret-like values are redacted. */
+  reason?: string;
 }
 
 export interface WalletQaProofProvenance {
@@ -195,6 +215,7 @@ export interface WalletQaProofSummary {
   maskedAccount?: string;
   chainId?: number | string;
   artifactCount: number;
+  decisionCount?: number;
   failure?: string;
 }
 
@@ -212,6 +233,7 @@ export interface WalletQaProofManifestOptions {
   attachments?: WalletQaProofAttachment[];
   failure?: unknown;
   notes?: string[];
+  decisions?: WalletQaProofDecisionRecord[];
   runId?: string;
   createdAt?: string;
   tool?: string;
@@ -685,6 +707,7 @@ export async function writeWalletQaProofManifest(options: WalletQaProofManifestO
   await mkdir(artifactDir, { recursive: true });
 
   const artifacts = await Promise.all((options.attachments ?? []).map((attachment) => createProofArtifact(artifactDir, attachment)));
+  const decisions = options.decisions?.map(sanitizeDecisionRecord);
   const maskedAccount = options.account ? maskEthereumAddress(options.account) : undefined;
   const failure = options.failure !== undefined ? formatWalletQaFailure(options.failure) : undefined;
   const summary: WalletQaProofSummary = {
@@ -693,6 +716,7 @@ export async function writeWalletQaProofManifest(options: WalletQaProofManifestO
     ...(maskedAccount ? { maskedAccount } : {}),
     ...(options.chainId !== undefined ? { chainId: options.chainId } : {}),
     artifactCount: artifacts.length,
+    ...(decisions ? { decisionCount: decisions.length } : {}),
     ...(failure ? { failure } : {})
   };
   const manifest: WalletQaProofManifest = {
@@ -715,6 +739,7 @@ export async function writeWalletQaProofManifest(options: WalletQaProofManifestO
     artifacts,
     ...(failure !== undefined ? { failure } : {}),
     ...(options.notes ? { notes: options.notes.map((note) => redactWalletQaValue(note)) } : {}),
+    ...(decisions ? { decisions } : {}),
     summary,
     checksums: { artifactSha256: artifacts.map((artifact) => artifact.sha256) }
   };
@@ -844,6 +869,23 @@ export function annotateWalletQaArtifact(testInfo: WalletQaAnnotationTarget, opt
 export function formatWalletQaFailure(error: unknown): string {
   const message = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
   return redactWalletQaValue(message);
+}
+
+function sanitizeDecisionRecord(record: WalletQaProofDecisionRecord): WalletQaProofDecisionRecord {
+  if (record.kind !== 'prompt' && record.kind !== 'action') {
+    throw new Error('Wallet QA proof decision kind must be prompt or action.');
+  }
+  if (record.decision !== 'approved' && record.decision !== 'rejected' && record.decision !== 'skipped' && record.decision !== 'observed') {
+    throw new Error('Wallet QA proof decision must be approved, rejected, skipped, or observed.');
+  }
+  return {
+    kind: record.kind,
+    action: sanitizePathPart(record.action),
+    decision: record.decision,
+    ...(record.promptKind ? { promptKind: sanitizePathPart(record.promptKind) } : {}),
+    ...(record.origin ? { origin: assertSafeOrigin(record.origin) } : {}),
+    ...(record.reason ? { reason: redactWalletQaValue(record.reason) } : {})
+  };
 }
 
 export function redactWalletQaValue(value: unknown): string {
@@ -1030,6 +1072,7 @@ function verifyWalletQaProofProvenance(manifest: WalletQaProofManifest): void {
     ...(manifest.maskedAccount ? { maskedAccount: manifest.maskedAccount } : {}),
     ...(manifest.chainId !== undefined ? { chainId: manifest.chainId } : {}),
     artifactCount: manifest.artifacts.length,
+    ...(manifest.decisions ? { decisionCount: manifest.decisions.length } : {}),
     ...(manifest.failure ? { failure: manifest.failure } : {})
   };
   if (JSON.stringify(manifest.summary) !== JSON.stringify(expectedSummary)) {
