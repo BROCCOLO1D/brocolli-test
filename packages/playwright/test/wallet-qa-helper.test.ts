@@ -10,6 +10,8 @@ import {
   createWalletQa,
   formatWalletQaFailure,
   redactWalletQaValue,
+  annotateWalletQaArtifact,
+  createWalletQaArtifactAnnotation,
   verifyWalletQaProofManifest,
   writeWalletQaArtifactIndex,
   writeWalletQaProofManifest,
@@ -291,6 +293,50 @@ describe('fail-closed wallet prompt driver', () => {
 
     await expect(prompt.approveConnection?.({ origin: 'https://app.example', expectedAccount: ACCOUNT, expectedChainIdHex: CHAIN_ID_HEX })).resolves.toBeUndefined();
     expect(approved).toEqual(['connection']);
+  });
+});
+
+describe('wallet QA Playwright annotations', () => {
+  it('creates stable public-safe annotations for proof manifests and artifact indexes', () => {
+    expect(createWalletQaArtifactAnnotation({
+      kind: 'proof-manifest',
+      file: 'wallet-connected.json',
+      status: 'connected',
+      chainId: 11155111,
+      maskedAccount: '0x1111…1111'
+    })).toEqual({
+      type: 'wallet-qa:proof-manifest',
+      description: 'file=wallet-connected.json status=connected chainId=11155111 account=0x1111…1111'
+    });
+
+    expect(createWalletQaArtifactAnnotation({
+      kind: 'artifact-index',
+      file: 'wallet-qa-artifact-index.json',
+      status: 'failed',
+      note: `reviewed ${ACCOUNT} in /home/alice/private/profile`
+    })).toEqual({
+      type: 'wallet-qa:artifact-index',
+      description: 'file=wallet-qa-artifact-index.json status=failed note=reviewed 0x1111…1111 in [path]/profile'
+    });
+  });
+
+  it('pushes wallet QA annotations onto Playwright testInfo without exposing unsafe files', () => {
+    const testInfo = { annotations: [] as Array<{ type: string; description?: string }> };
+
+    annotateWalletQaArtifact(testInfo, {
+      kind: 'proof-manifest',
+      file: 'wallet-connected.json',
+      status: 'connected',
+      chainId: '0xaa36a7'
+    });
+
+    expect(testInfo.annotations).toEqual([
+      {
+        type: 'wallet-qa:proof-manifest',
+        description: 'file=wallet-connected.json status=connected chainId=0xaa36a7'
+      }
+    ]);
+    expect(() => annotateWalletQaArtifact(testInfo, { kind: 'proof-manifest', file: '../wallet-connected.json' })).toThrow(/safe basename/i);
   });
 });
 

@@ -73,7 +73,7 @@ export default defineWalletQaConfig({
 
 ```ts
 // tests/wallet.spec.ts
-import { expect, test, verifyWalletQaProofManifest } from '@broccolo1d/playwright';
+import { annotateWalletQaArtifact, expect, test, verifyWalletQaProofManifest } from '@broccolo1d/playwright';
 
 test('connects through wallet policy', async ({ page, wallet, walletArtifacts }) => {
   await page.goto('http://127.0.0.1:5173');
@@ -105,8 +105,20 @@ test('connects through wallet policy', async ({ page, wallet, walletArtifacts })
     notes: ['connect-only wallet QA proof']
   });
 
-  await verifyWalletQaProofManifest(walletArtifacts.artifactDir, 'wallet-connected.json');
+  const verification = await verifyWalletQaProofManifest(walletArtifacts.artifactDir, 'wallet-connected.json');
   await walletArtifacts.writeArtifactIndex({ manifestNames: ['wallet-connected.json'] });
+  annotateWalletQaArtifact(test.info(), {
+    kind: 'proof-manifest',
+    file: 'wallet-connected.json',
+    status: 'connected',
+    chainId: result.chainId,
+    maskedAccount: verification.manifest.maskedAccount
+  });
+  annotateWalletQaArtifact(test.info(), {
+    kind: 'artifact-index',
+    file: 'wallet-qa-artifact-index.json',
+    status: 'connected'
+  });
   await expect(page.getByText(/connected/i)).toBeVisible();
 });
 ```
@@ -116,6 +128,8 @@ The proof manifest stores public-oriented metadata: `schemaVersion: 1`, `created
 `verifyWalletQaProofManifest()` returns the parsed manifest plus verifier-side provenance (`schemaVersion`, `createdAt`, `runId`, `provenance`) and a `manifestSha256` digest computed from the manifest file. The digest is intentionally returned by the verifier instead of embedded in the manifest to avoid self-hashing ambiguity. Manifests must include schema v1 provenance; downgraded manifests without `schemaVersion` are rejected.
 
 `walletArtifacts.writeArtifactIndex({ manifestNames })` (or `writeWalletQaArtifactIndex`) writes `wallet-qa-artifact-index.json`: a CI-friendly, public-safe summary of verified proof manifests, manifest sha256 digests, masked account/chain/origin fields, and evidence artifact basenames/hashes. Upload this index with reviewed proof artifacts so agents and CI reviewers can discover evidence without scanning raw Playwright output.
+
+`annotateWalletQaArtifact(test.info(), { kind, file, status, chainId, maskedAccount })` adds stable Playwright annotations such as `wallet-qa:proof-manifest` and `wallet-qa:artifact-index` to the current test. Annotation files must be safe basenames, and notes are redacted through the same address/path/secret filters used by proof manifests so reports can point reviewers at promoted artifacts without leaking local paths or wallet material.
 
 ## Wildcat README-quality example
 
@@ -164,6 +178,7 @@ Positive connected-wallet evidence must show the app running locally on the requ
 - `writeWalletQaProofManifest(options)`: writes a public schema v1 proof manifest with safe attachment metadata, provenance, summaries, checksums, and redacted failures.
 - `verifyWalletQaProofManifest(artifactDir)`: verifies manifest shape, required schema v1 provenance, summary/checksum consistency, attachment hashes/sizes, and rejects full addresses, raw secrets/RPC tokens, local path leaks, and downgraded manifests without `schemaVersion`.
 - `writeWalletQaArtifactIndex({ artifactDir, manifestNames })`: verifies the listed proof manifests and writes a public-safe `wallet-qa-artifact-index.json` for CI uploads/review.
+- `createWalletQaArtifactAnnotation(options)` / `annotateWalletQaArtifact(testInfo, options)`: build and push stable Playwright annotations (`wallet-qa:proof-manifest`, `wallet-qa:artifact-index`, etc.) with safe artifact basenames and redacted descriptions.
 - `formatWalletQaFailure(error)` / `redactWalletQaValue(value)`: produce doc-safe failure snippets by masking wallet addresses and local paths.
 
 ## Failure proof

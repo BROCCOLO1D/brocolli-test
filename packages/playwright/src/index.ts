@@ -218,6 +218,29 @@ export interface WalletQaProofManifestOptions {
   test?: WalletQaProofTestMetadata;
 }
 
+export type WalletQaArtifactAnnotationKind = 'proof-manifest' | 'artifact-index' | 'screenshot' | 'trace' | 'report';
+
+export interface WalletQaArtifactAnnotationOptions {
+  kind: WalletQaArtifactAnnotationKind;
+  /** Safe basename for the public/reviewed artifact; nested or absolute paths are rejected. */
+  file: string;
+  status?: WalletQaProofStatus;
+  chainId?: string | number;
+  /** Already-masked account, for example 0x1234…abcd. Full wallet addresses are redacted before annotation. */
+  maskedAccount?: string;
+  /** Optional short note. Full addresses, local paths, and secret-like values are redacted. */
+  note?: string;
+}
+
+export interface WalletQaPlaywrightAnnotation {
+  type: `wallet-qa:${WalletQaArtifactAnnotationKind}`;
+  description: string;
+}
+
+export interface WalletQaAnnotationTarget {
+  annotations: Array<{ type: string; description?: string }>;
+}
+
 export interface WalletQaProofVerificationResult {
   status: 'verified';
   artifactDir: string;
@@ -795,6 +818,27 @@ export async function writeWalletQaArtifactIndex(options: WalletQaArtifactIndexO
   const indexPath = join(artifactDir, indexName);
   await writeFile(indexPath, text, 'utf8');
   return indexPath;
+}
+
+export function createWalletQaArtifactAnnotation(options: WalletQaArtifactAnnotationOptions): WalletQaPlaywrightAnnotation {
+  assertSafeArtifactBasename(options.file, 'annotation artifact file');
+  const fields = [
+    `file=${options.file}`,
+    ...(options.status ? [`status=${options.status}`] : []),
+    ...(options.chainId !== undefined ? [`chainId=${String(options.chainId)}`] : []),
+    ...(options.maskedAccount ? [`account=${redactWalletQaValue(options.maskedAccount)}`] : []),
+    ...(options.note ? [`note=${redactWalletQaValue(options.note)}`] : [])
+  ];
+  return {
+    type: `wallet-qa:${options.kind}`,
+    description: fields.join(' ')
+  };
+}
+
+export function annotateWalletQaArtifact(testInfo: WalletQaAnnotationTarget, options: WalletQaArtifactAnnotationOptions): WalletQaPlaywrightAnnotation {
+  const annotation = createWalletQaArtifactAnnotation(options);
+  testInfo.annotations.push(annotation);
+  return annotation;
 }
 
 export function formatWalletQaFailure(error: unknown): string {
