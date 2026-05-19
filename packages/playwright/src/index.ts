@@ -127,6 +127,7 @@ export interface WalletArtifacts {
   screenshot(name: string, options?: Parameters<Page['screenshot']>[0]): Promise<string>;
   writeManifest(name: string, data: Record<string, unknown>): Promise<string>;
   writeProofManifest(options: Omit<WalletQaProofManifestOptions, 'artifactDir'>): Promise<string>;
+  writeArtifactIndex(options: Omit<WalletQaArtifactIndexOptions, 'artifactDir'>): Promise<string>;
   connectedProof(name: string, options: Omit<WalletQaProofManifestOptions, 'artifactDir' | 'manifestName' | 'status' | 'failure'>): Promise<string>;
   writeFailureManifest(name: string, error: unknown, data?: Record<string, unknown>): Promise<string>;
 }
@@ -227,6 +228,43 @@ export interface WalletQaProofVerificationResult {
   runId: string;
   provenance: WalletQaProofProvenance;
   manifest: WalletQaProofManifest;
+}
+
+export interface WalletQaArtifactIndexEntry {
+  file: string;
+  sha256: string;
+  status: WalletQaProofStatus;
+  origin?: string;
+  maskedAccount?: string;
+  chainId?: number | string;
+  artifactCount: number;
+  artifacts: WalletQaProofArtifact[];
+}
+
+export interface WalletQaArtifactIndexSummary {
+  manifestCount: number;
+  connectedCount: number;
+  failedCount: number;
+  artifactCount: number;
+}
+
+export interface WalletQaArtifactIndex {
+  schemaVersion: 1;
+  artifactType: 'wallet-qa-artifact-index';
+  createdAt: string;
+  runId: string;
+  provenance: WalletQaProofProvenance;
+  summary: WalletQaArtifactIndexSummary;
+  manifests: WalletQaArtifactIndexEntry[];
+}
+
+export interface WalletQaArtifactIndexOptions {
+  artifactDir: string;
+  manifestNames: string[];
+  indexName?: string;
+  runId?: string;
+  createdAt?: string;
+  tool?: string;
 }
 
 export interface WalletQaFixtures {
@@ -544,6 +582,9 @@ export function createWalletArtifacts(page: Page, config: WalletQaConfig, testIn
     async writeProofManifest(options) {
       return writeWalletQaProofManifest({ ...options, artifactDir: runDir, test: testMetadataFromInfo(testInfo) });
     },
+    async writeArtifactIndex(options) {
+      return writeWalletQaArtifactIndex({ ...options, artifactDir: runDir, tool: options.tool ?? 'walletArtifacts.writeArtifactIndex' });
+    },
     async connectedProof(name, options) {
       const manifestName = `${sanitizePathPart(name)}.json`;
       const attachments = await Promise.all((options.attachments ?? []).map(async (attachment) => {
@@ -703,6 +744,57 @@ export async function verifyWalletQaProofManifest(artifactDir: string, manifestN
     provenance: manifest.provenance,
     manifest
   };
+}
+
+export async function writeWalletQaArtifactIndex(options: WalletQaArtifactIndexOptions): Promise<string> {
+  const artifactDir = resolve(options.artifactDir);
+  const indexName = options.indexName ?? 'wallet-qa-artifact-index.json';
+  assertSafeArtifactBasename(indexName, 'artifact index name');
+  await mkdir(artifactDir, { recursive: true });
+
+  const manifests = await Promise.all(options.manifestNames.map(async (manifestName): Promise<WalletQaArtifactIndexEntry> => {
+    assertSafeArtifactBasename(manifestName, 'manifest name');
+    const verified = await verifyWalletQaProofManifest(artifactDir, manifestName);
+    const manifest = verified.manifest;
+    return {
+      file: manifestName,
+      sha256: verified.manifestSha256,
+      status: manifest.status,
+      ...(manifest.origin ? { origin: manifest.origin } : {}),
+      ...(manifest.maskedAccount ? { maskedAccount: manifest.maskedAccount } : {}),
+      ...(manifest.chainId !== undefined ? { chainId: manifest.chainId } : {}),
+      artifactCount: manifest.artifacts.length,
+      artifacts: manifest.artifacts
+    };
+  }));
+
+  const summary: WalletQaArtifactIndexSummary = {
+    manifestCount: manifests.length,
+    connectedCount: manifests.filter((manifest) => manifest.status === 'connected').length,
+    failedCount: manifests.filter((manifest) => manifest.status === 'failed').length,
+    artifactCount: manifests.reduce((count, manifest) => count + manifest.artifactCount, 0)
+  };
+  const index: WalletQaArtifactIndex = {
+    schemaVersion: 1,
+    artifactType: 'wallet-qa-artifact-index',
+    createdAt: options.createdAt ?? new Date().toISOString(),
+    runId: options.runId ?? randomUUID(),
+    provenance: {
+      packageName: '@broccolo1d/playwright',
+      packageVersion: PLAYWRIGHT_PACKAGE_VERSION,
+      framework: 'playwright',
+      tool: sanitizeProvenanceTool(options.tool ?? 'writeWalletQaArtifactIndex'),
+      runtime: runtimeMetadata()
+    },
+    summary,
+    manifests
+  };
+
+  const text = `${JSON.stringify(index, null, 2)}\n`;
+  assertPublicManifestIsSafe(text, artifactDir);
+  const indexPath = join(artifactDir, indexName);
+  await writeFile(indexPath, text, 'utf8');
+  return indexPath;
 }
 
 export function formatWalletQaFailure(error: unknown): string {

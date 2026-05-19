@@ -11,6 +11,7 @@ import {
   formatWalletQaFailure,
   redactWalletQaValue,
   verifyWalletQaProofManifest,
+  writeWalletQaArtifactIndex,
   writeWalletQaProofManifest,
   type WalletQaProofAttachment
 } from '../src/index.js';
@@ -229,6 +230,14 @@ describe('developer-first wallet QA fixture helpers', () => {
       provenance: { framework: 'playwright', tool: 'walletArtifacts.connectedProof' },
       manifest: { status: 'connected', maskedAccount: '0x1111…1111' }
     });
+
+    const indexPath = await artifacts.writeArtifactIndex({ manifestNames: ['dapp-connected.json'], indexName: 'artifact-index.json' });
+    const index = JSON.parse(await readFile(indexPath, 'utf8'));
+    expect(index).toMatchObject({
+      artifactType: 'wallet-qa-artifact-index',
+      summary: { manifestCount: 1, connectedCount: 1, artifactCount: 1 },
+      manifests: [{ file: 'dapp-connected.json', status: 'connected', maskedAccount: '0x1111…1111' }]
+    });
   });
 });
 
@@ -286,6 +295,56 @@ describe('fail-closed wallet prompt driver', () => {
 });
 
 describe('wallet QA proof manifests', () => {
+  it('writes a CI-friendly artifact index from verified proof manifests', async () => {
+    const artifactDir = await tempArtifactDir();
+    const screenshot = join(artifactDir, 'connected.png');
+    await writeFile(screenshot, 'fake image bytes');
+    const manifestPath = await writeWalletQaProofManifest({
+      artifactDir,
+      manifestName: 'wallet-connected.json',
+      status: 'connected',
+      origin: 'https://app.example',
+      account: ACCOUNT,
+      chainId: 11155111,
+      attachments: [{ label: 'wallet-connected', path: screenshot, contentType: 'image/png' }],
+      runId: 'run-123',
+      createdAt: '2026-01-01T00:00:00.000Z'
+    });
+
+    const indexPath = await writeWalletQaArtifactIndex({
+      artifactDir,
+      manifestNames: ['wallet-connected.json'],
+      indexName: 'artifact-index.json',
+      runId: 'index-run-123',
+      createdAt: '2026-01-01T00:01:00.000Z'
+    });
+
+    const indexText = await readFile(indexPath, 'utf8');
+    const index = JSON.parse(indexText);
+    expect(indexPath).toBe(join(artifactDir, 'artifact-index.json'));
+    expect(index).toMatchObject({
+      schemaVersion: 1,
+      artifactType: 'wallet-qa-artifact-index',
+      createdAt: '2026-01-01T00:01:00.000Z',
+      runId: 'index-run-123',
+      summary: { manifestCount: 1, connectedCount: 1, failedCount: 0, artifactCount: 1 },
+      manifests: [{
+        file: 'wallet-connected.json',
+        sha256: expect.stringMatching(/^[0-9a-f]{64}$/),
+        status: 'connected',
+        origin: 'https://app.example',
+        maskedAccount: '0x1111…1111',
+        chainId: 11155111,
+        artifactCount: 1,
+        artifacts: [{ label: 'wallet-connected', file: 'connected.png', sizeBytes: 16, sha256: expect.stringMatching(/^[0-9a-f]{64}$/) }]
+      }]
+    });
+    expect(index.manifests[0].sha256).toBe((await verifyWalletQaProofManifest(artifactDir, 'wallet-connected.json')).manifestSha256);
+    expect(indexText).not.toContain(artifactDir);
+    expect(indexText).not.toContain(manifestPath);
+    expect(indexText).not.toContain(ACCOUNT);
+  });
+
   it('writes and verifies public manifests with basename, sha256, and size only', async () => {
     const artifactDir = await tempArtifactDir();
     const screenshot = join(artifactDir, 'connected.png');
