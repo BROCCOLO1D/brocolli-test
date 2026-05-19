@@ -117,6 +117,37 @@ The proof manifest stores public-oriented metadata: `schemaVersion: 1`, `created
 
 `walletArtifacts.writeArtifactIndex({ manifestNames })` (or `writeWalletQaArtifactIndex`) writes `wallet-qa-artifact-index.json`: a CI-friendly, public-safe summary of verified proof manifests, manifest sha256 digests, masked account/chain/origin fields, and evidence artifact basenames/hashes. Upload this index with reviewed proof artifacts so agents and CI reviewers can discover evidence without scanning raw Playwright output.
 
+## Wildcat README-quality example
+
+Wildcat uses this package as a product-app example rather than a toy fixture. Copy this pattern when documenting another dapp integration:
+
+```bash
+# CI-safe app smoke; no private wallet material.
+NEXT_PUBLIC_TARGET_NETWORK=Sepolia \
+NEXT_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/test-alchemy-key \
+NEXT_PUBLIC_API_URL=https://api.wildcat.finance \
+NEXT_PUBLIC_TOKENS_LIST_URL=https://tokens.1inch.eth.link \
+NEXT_PUBLIC_TOKENS_IMG_HOSTNAME=tokens.1inch.io \
+WILDCAT_WALLET_QA_RUN_APP=1 \
+npm run test:wallet -- --grep "loads local lender shell"
+```
+
+```bash
+# Optional connected-wallet proof; local/testnet secrets only, from ignored config.
+chmod 600 .env
+set -a && . ./.env && set +a
+NEXT_PUBLIC_TARGET_NETWORK=Sepolia npm run test:wallet:real-metamask
+```
+
+Publishable docs should link only reviewed files copied out of raw Playwright output, for example:
+
+```text
+docs/screenshots/wildcat-connected-sepolia-test-wallet.png
+docs/screenshots/wildcat-connected-sepolia-test-wallet-proof.json
+```
+
+Positive connected-wallet evidence must show the app running locally on the requested testnet with a connected deterministic test wallet and visible network/account UI. Do not present no-wallet pages, connect dialogs, blank screenshots, public-address-only injected-wallet state, raw `.wallet-artifacts`, traces, videos, extension bundles, or MetaMask profiles as final README evidence.
+
 ## Fixture surface
 
 - `walletConfig`: per-test wallet QA configuration.
