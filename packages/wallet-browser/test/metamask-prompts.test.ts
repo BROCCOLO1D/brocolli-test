@@ -131,6 +131,25 @@ describe('MetaMask prompt driver', () => {
     expect(page.clicks).toEqual([]);
   });
 
+  it('reports the explicit non-connection marker before refusing a mixed fake connection prompt', async () => {
+    const page = new FakePromptPage(
+      'chrome-extension://metamaskid/notification.html#connect',
+      'Connect with MetaMask https://fixture.example wants to connect. Spending cap request: give permission to access your tokens.'
+    );
+    page.visibleSelectors.add('[data-testid="page-container-footer-next"]');
+    page.visibleSelectors.add('[data-testid="page-container-footer-connect"]');
+
+    const driver = createMetaMaskPromptDriver({ context: makeContext(page) });
+
+    await expect(driver.approveConnection?.({
+      origin: 'https://fixture.example',
+      expectedAccount: ADDRESS,
+      expectedChainIdHex: '0xaa36a7'
+    })).rejects.toThrow(/spending cap/);
+
+    expect(page.clicks).toEqual([]);
+  });
+
   it('fails closed when an expected approval button is not visible', async () => {
     const page = new FakePromptPage(
       'chrome-extension://metamaskid/notification.html#connect',
