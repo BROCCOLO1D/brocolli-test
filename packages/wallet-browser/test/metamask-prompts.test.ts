@@ -253,6 +253,15 @@ describe('MetaMask prompt driver', () => {
     expect(page.clicks).toEqual([]);
   });
 
+  it('classifies ambiguous mixed-marker prompt text as unknown', () => {
+    const classification = classifyMetaMaskPromptText(
+      'Connect with MetaMask. Signature request https://fixture.example wants you to sign this message: Sign in'
+    );
+
+    expect(classification.kind).toBe('unknown');
+    expect(classification.matchedMarker).toBeUndefined();
+  });
+
   it('classifies simple prompt text by kind', () => {
     const cases = [
       {

@@ -192,14 +192,17 @@ export function classifyMetaMaskPromptText(promptText: string): MetaMaskPromptCl
     ['connect', CONNECTION_PROMPT_MARKERS]
   ];
 
-  for (const [kind, markers] of orderedChecks) {
+  const matches = orderedChecks.flatMap(([kind, markers]) => {
     const matchedMarker = markers.find((marker) => normalizedText.includes(marker));
-    if (matchedMarker) {
-      return { kind, matchedMarker };
-    }
+    return matchedMarker ? [{ kind, matchedMarker }] : [];
+  });
+
+  const matchedKinds = new Set(matches.map((match) => match.kind));
+  if (matchedKinds.size !== 1) {
+    return { kind: 'unknown' };
   }
 
-  return { kind: 'unknown' };
+  return matches[0];
 }
 
 export async function approveMetaMaskSignaturePrompt(
