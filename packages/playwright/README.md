@@ -223,4 +223,6 @@ No prompt approval is implicit. Transaction approval is not exposed by this fixt
     SEPOLIA_WALLET_ADDRESS: ${{ secrets.SEPOLIA_WALLET_ADDRESS }}
 ```
 
-Keep traces, videos, raw screenshots, profiles, extension bundles, and `.env` files out of git. Upload artifacts only after `verifyWalletQaProofManifest` passes and screenshots have been reviewed.
+Keep traces, videos, raw screenshots, profiles, extension bundles, and `.env` files out of git. Upload artifacts only after `verifyWalletQaProofManifest` passes, `walletArtifacts.writeArtifactIndex` has produced `wallet-qa-artifact-index.json`, and screenshots have been reviewed.
+
+For a complete GitHub Actions upload policy, reviewed-evidence artifact list, failure-diagnostics split, and issue/PR handoff template, see the [CI artifact upload and review runbook](https://github.com/BROCCOLO1D/brocolli-test/blob/main/docs/ci-artifact-review.md).

@@ -43,5 +43,8 @@ Milestone 3 proof artifact hardening is implemented for package proof manifests:
 - Use burner/testnet accounts with limited funds.
 - Run browser-wallet flows under Xvfb or another explicit display server.
 - Disable trace/video retention by default for secret-backed runs.
-- Upload only scrubbed artifacts, preferably after verifier success.
+- Upload only scrubbed artifacts after `verifyWalletQaProofManifest()` and `walletArtifacts.writeArtifactIndex()` succeed.
+- Upload the artifact index, reviewed proof manifests, and reviewed screenshots rather than raw `.wallet-artifacts/`, profiles, extension bundles, traces, videos, or HTML reports.
 - Fail if `.env`, profiles, extension directories, traces, reports, or local proof artifacts become tracked.
+
+See [CI artifact upload and review runbook](./ci-artifact-review.md) for a copyable GitHub Actions pattern, review checklist, and agent handoff format.

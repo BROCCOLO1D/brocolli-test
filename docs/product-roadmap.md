@@ -187,15 +187,16 @@ Acceptance:
 - unsupported chain fails before `eth_sendTransaction` approval;
 - transaction hash/status is captured when available.
 
-### 6. CI packaging — planned
+### 6. CI packaging — in progress
 
-Make secret-backed CI usage practical but conservative.
+Make secret-backed CI usage practical but conservative. The artifact index, stable Playwright annotations, prompt/action decision records, and [`docs/ci-artifact-review.md`](./ci-artifact-review.md) runbook now cover the reviewed-evidence upload path.
 
 Acceptance:
 
 - documented GitHub Actions example using CI secrets and Xvfb;
 - traces/videos disabled by default;
-- artifacts uploaded only after redaction and verifier pass;
+- artifacts uploaded only after redaction, proof verification, artifact-index generation, and screenshot review;
+- separate opt-in path for short-lived failure diagnostics;
 - fail if `.env`, profiles, extensions, traces, reports, or raw wallet artifacts become tracked.
 
 ### 7. App integration examples — planned
