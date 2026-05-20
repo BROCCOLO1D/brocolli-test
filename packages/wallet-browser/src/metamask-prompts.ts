@@ -143,14 +143,13 @@ export async function approveMetaMaskConnectionPrompt(
 
 export function assertMetaMaskConnectionPromptText(promptText: string, expectedOrigin?: string): void {
   const normalizedText = promptText.toLowerCase();
+  const unexpectedMarker = NON_CONNECTION_PROMPT_MARKERS.find((marker) => normalizedText.includes(marker));
+  if (unexpectedMarker) {
+    throw new Error(`Unexpected MetaMask prompt marker "${unexpectedMarker}" while expecting a connection prompt; refusing to click.`);
+  }
+
   const classification = classifyMetaMaskPromptText(promptText);
   if (classification.kind !== 'connect') {
-    const unexpectedMarker = classification.matchedMarker && NON_CONNECTION_PROMPT_MARKERS.includes(classification.matchedMarker as typeof NON_CONNECTION_PROMPT_MARKERS[number])
-      ? classification.matchedMarker
-      : undefined;
-    if (unexpectedMarker) {
-      throw new Error(`Unexpected MetaMask prompt marker "${unexpectedMarker}" while expecting a connection prompt; refusing to click.`);
-    }
     throw new Error('MetaMask notification page did not look like a connection prompt; refusing to click.');
   }
 
