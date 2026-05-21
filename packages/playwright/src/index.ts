@@ -383,7 +383,7 @@ const DEFAULT_WALLET_CONFIG: WalletQaConfig = {
   useRealWallet: false,
   artifactDir: '.wallet-artifacts/playwright'
 };
-const PLAYWRIGHT_PACKAGE_VERSION = '0.2.9';
+const PLAYWRIGHT_PACKAGE_VERSION = '0.2.10';
 const ETHEREUM_ADDRESS_PATTERN = /^0x[a-fA-F0-9]{40}$/;
 const ZERO_ETHEREUM_ADDRESS = '0x0000000000000000000000000000000000000000';
 
