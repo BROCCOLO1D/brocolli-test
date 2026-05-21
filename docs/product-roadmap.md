@@ -41,6 +41,26 @@ pnpm add -D @broccolo1d/wallet-browser@0.2.9 playwright
 
 ### Playwright fixture layer
 
+`@broccolo1d/playwright` now includes the first half of the killer-feature pair: a declarative wallet scenario builder for deterministic CI-safe dapp UI states.
+
+```ts
+import { expect, installWalletScenario, test, verifyWalletQaProofManifest, walletScenario } from '@broccolo1d/playwright';
+
+await installWalletScenario(
+  page,
+  walletScenario()
+    .connected({ account: '0x1111111111111111111111111111111111111111' })
+    .withChain(11155111)
+    .rejectsSignature()
+    .withProviderInfo({ walletId: 'io.metamask', name: 'MetaMask' })
+    .build()
+);
+```
+
+Scenario-builder rows are UI smoke only unless paired with an actual private-key-backed wallet proof. Consumer suites still need to capture screenshot + structured manifest + artifact-index evidence for each route/state row.
+
+The existing fixture flow remains app-owned:
+
 ```ts
 import { expect, test, verifyWalletQaProofManifest } from '@broccolo1d/playwright';
 
@@ -236,8 +256,8 @@ Agents should not receive raw secrets, full profiles, full wallet addresses, or 
 
 ## Immediate progression steps
 
-0. **Build the next killer-feature pair.** Follow [`docs/plans/2026-05-21-wallet-contract-tests-and-scenarios.md`](./plans/2026-05-21-wallet-contract-tests-and-scenarios.md): first ship `walletScenario()` / `installWalletScenario()` for declarative deterministic wallet states, then ship `walletContractTests()` for reusable dapp wallet contract rows.
-1. **Use scenario builder as the foundation.** Cover disconnected, connected, wrong-chain, invalid-account, rejected signature, pending/rejected transaction, and optional EIP-6963 discovery states without real wallet secrets.
+0. **Build the next killer-feature pair.** Follow [`docs/plans/2026-05-21-wallet-contract-tests-and-scenarios.md`](./plans/2026-05-21-wallet-contract-tests-and-scenarios.md): `walletScenario()` / `installWalletScenario()` now cover the declarative deterministic wallet-state foundation; next ship `walletContractTests()` for reusable dapp wallet contract rows.
+1. **Use scenario builder as the foundation.** Apply the new disconnected, connected, wrong-chain, rejected signature/transaction, and optional EIP-6963 discovery states in package-level contract rows and downstream consumer tests without real wallet secrets.
 2. **Make contract tests evidence-producing by default.** Every route/state row must write a screenshot, structured manifest, and artifact-index entry; selector/modal assertions remain consumer-owned.
 3. **Adopt in Wildcat as the first real consumer.** After package tests/docs pass, replace/augment bespoke Wildcat wallet smoke coverage with the public scenario/contract-test APIs.
 4. **Keep smoke vs proof wording strict.** Scenario and contract rows are CI-safe UI smoke unless paired with private-key-backed real MetaMask/test-wallet proof.

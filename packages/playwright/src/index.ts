@@ -90,6 +90,61 @@ export interface DeterministicInjectedWalletOptions {
   chainId: number | string;
 }
 
+export type WalletScenarioConnectionState = 'disconnected' | 'connected';
+
+export interface WalletScenarioProviderInfo {
+  walletId?: string;
+  name?: string;
+  icon?: string;
+  rdns?: string;
+}
+
+export interface WalletScenarioTokenBalance {
+  symbol: string;
+  amount: string;
+}
+
+export interface WalletScenarioPendingTransaction {
+  hash: string;
+  label?: string;
+}
+
+export interface WalletScenarioMethodError {
+  code?: number;
+  message: string;
+}
+
+export interface WalletScenarioMethodOutcome {
+  method: string;
+  type: 'resolve' | 'reject';
+  value?: unknown;
+  error?: WalletScenarioMethodError;
+}
+
+export interface WalletScenarioState {
+  connectionState: WalletScenarioConnectionState;
+  account?: string;
+  chainIdHex: string;
+  providerInfo?: WalletScenarioProviderInfo;
+  tokenBalances: WalletScenarioTokenBalance[];
+  pendingTransactions: WalletScenarioPendingTransaction[];
+  methodOutcomes: WalletScenarioMethodOutcome[];
+}
+
+export interface WalletScenarioBuilder {
+  disconnected(): WalletScenarioBuilder;
+  connected(options: { account: string }): WalletScenarioBuilder;
+  withChain(chainId: string | number): WalletScenarioBuilder;
+  withProviderInfo(info: WalletScenarioProviderInfo): WalletScenarioBuilder;
+  withTokenBalance(balance: WalletScenarioTokenBalance): WalletScenarioBuilder;
+  withPendingTransaction(transaction: WalletScenarioPendingTransaction): WalletScenarioBuilder;
+  resolvesMethod(method: string, value: unknown): WalletScenarioBuilder;
+  rejectsMethod(method: string, error: WalletScenarioMethodError): WalletScenarioBuilder;
+  rejectsSignature(error?: WalletScenarioMethodError): WalletScenarioBuilder;
+  rejectsTransaction(error?: WalletScenarioMethodError): WalletScenarioBuilder;
+  build(): WalletScenarioState;
+}
+
 export type DeterministicInjectedWalletPage = Pick<Page, 'addInitScript'>;
 
 export interface WalletAssertStateOptions {
@@ -349,12 +404,83 @@ function normalizeChainIdHex(chainId: string | number): string {
   }
 
   if (/^0x[0-9a-fA-F]+$/.test(chainId)) {
-    return `0x${Number.parseInt(chainId, 16).toString(16)}`;
+    const parsed = Number.parseInt(chainId, 16);
+    if (!Number.isInteger(parsed) || parsed <= 0) {
+      throw new Error('Deterministic injected wallet chainId must be a positive integer or 0x-prefixed hex string.');
+    }
+    return `0x${parsed.toString(16)}`;
   }
   if (/^[0-9]+$/.test(chainId)) {
     return normalizeChainIdHex(Number.parseInt(chainId, 10));
   }
   throw new Error('Deterministic injected wallet chainId must be a positive integer or 0x-prefixed hex string.');
+}
+
+const DEFAULT_SIGNATURE_REJECTION: WalletScenarioMethodError = { code: 4001, message: 'User rejected signature request.' };
+const DEFAULT_TRANSACTION_REJECTION: WalletScenarioMethodError = { code: 4001, message: 'User rejected transaction request.' };
+
+class WalletScenarioBuilderImpl implements WalletScenarioBuilder {
+  constructor(private readonly state: WalletScenarioState) {}
+
+  disconnected(): WalletScenarioBuilder {
+    return new WalletScenarioBuilderImpl({ ...this.state, connectionState: 'disconnected', account: undefined });
+  }
+
+  connected(options: { account: string }): WalletScenarioBuilder {
+    return new WalletScenarioBuilderImpl({ ...this.state, connectionState: 'connected', account: normalizeNonZeroEthereumAddress(options.account) });
+  }
+
+  withChain(chainId: string | number): WalletScenarioBuilder {
+    return new WalletScenarioBuilderImpl({ ...this.state, chainIdHex: normalizeChainIdHex(chainId) });
+  }
+
+  withProviderInfo(info: WalletScenarioProviderInfo): WalletScenarioBuilder {
+    return new WalletScenarioBuilderImpl({ ...this.state, providerInfo: { ...info } });
+  }
+
+  withTokenBalance(balance: WalletScenarioTokenBalance): WalletScenarioBuilder {
+    return new WalletScenarioBuilderImpl({ ...this.state, tokenBalances: [...this.state.tokenBalances, { ...balance }] });
+  }
+
+  withPendingTransaction(transaction: WalletScenarioPendingTransaction): WalletScenarioBuilder {
+    return new WalletScenarioBuilderImpl({ ...this.state, pendingTransactions: [...this.state.pendingTransactions, { ...transaction }] });
+  }
+
+  resolvesMethod(method: string, value: unknown): WalletScenarioBuilder {
+    return new WalletScenarioBuilderImpl({ ...this.state, methodOutcomes: [...this.state.methodOutcomes, { method, type: 'resolve', value }] });
+  }
+
+  rejectsMethod(method: string, error: WalletScenarioMethodError): WalletScenarioBuilder {
+    return new WalletScenarioBuilderImpl({ ...this.state, methodOutcomes: [...this.state.methodOutcomes, { method, type: 'reject', error: { ...error } }] });
+  }
+
+  rejectsSignature(error: WalletScenarioMethodError = DEFAULT_SIGNATURE_REJECTION): WalletScenarioBuilder {
+    return this.rejectsMethod('personal_sign', error).rejectsMethod('eth_signTypedData_v4', error);
+  }
+
+  rejectsTransaction(error: WalletScenarioMethodError = DEFAULT_TRANSACTION_REJECTION): WalletScenarioBuilder {
+    return this.rejectsMethod('eth_sendTransaction', error);
+  }
+
+  build(): WalletScenarioState {
+    return {
+      ...this.state,
+      providerInfo: this.state.providerInfo ? { ...this.state.providerInfo } : undefined,
+      tokenBalances: this.state.tokenBalances.map((balance) => ({ ...balance })),
+      pendingTransactions: this.state.pendingTransactions.map((transaction) => ({ ...transaction })),
+      methodOutcomes: this.state.methodOutcomes.map((outcome) => ({ ...outcome, error: outcome.error ? { ...outcome.error } : undefined }))
+    };
+  }
+}
+
+export function walletScenario(): WalletScenarioBuilder {
+  return new WalletScenarioBuilderImpl({
+    connectionState: 'disconnected',
+    chainIdHex: '0x1',
+    tokenBalances: [],
+    pendingTransactions: [],
+    methodOutcomes: []
+  });
 }
 
 function runtimeMetadata(): WalletQaProofRuntimeMetadata {
@@ -365,50 +491,74 @@ export function defineWalletQaConfig(config: WalletQaPlaywrightConfig): WalletQa
   return defineConfig(config) as WalletQaPlaywrightConfig;
 }
 
-export async function installDeterministicInjectedWallet(
-  page: DeterministicInjectedWalletPage,
-  options: DeterministicInjectedWalletOptions
-): Promise<void> {
-  const account = normalizeNonZeroEthereumAddress(options.account);
-  const chainIdHex = normalizeChainIdHex(options.chainId);
+export async function installWalletScenario(page: DeterministicInjectedWalletPage, scenario: WalletScenarioState): Promise<void> {
+  const normalizedScenario: WalletScenarioState = {
+    ...scenario,
+    account: scenario.account ? normalizeNonZeroEthereumAddress(scenario.account) : undefined,
+    chainIdHex: normalizeChainIdHex(scenario.chainIdHex),
+    providerInfo: scenario.providerInfo ? { ...scenario.providerInfo } : undefined,
+    tokenBalances: scenario.tokenBalances.map((balance) => ({ ...balance })),
+    pendingTransactions: scenario.pendingTransactions.map((transaction) => ({ ...transaction })),
+    methodOutcomes: scenario.methodOutcomes.map((outcome) => ({ ...outcome, error: outcome.error ? { ...outcome.error } : undefined }))
+  };
 
-  await page.addInitScript(({ account: injectedAccount, chainIdHex: injectedChainIdHex }) => {
+  if (normalizedScenario.connectionState === 'connected' && !normalizedScenario.account) {
+    throw new Error('Connected wallet scenarios require a non-zero Ethereum address.');
+  }
+
+  await page.addInitScript((injectedScenario: WalletScenarioState) => {
     const listeners = new Map<string, Set<(payload: unknown) => void>>();
     const emit = (event: string, payload: unknown) => {
       for (const listener of listeners.get(event) ?? []) listener(payload);
     };
-    const networkVersion = Number.parseInt(injectedChainIdHex, 16).toString();
+    const supportedChainIdHex = injectedScenario.chainIdHex;
+    const networkVersion = Number.parseInt(supportedChainIdHex, 16).toString();
+    const connectedAccount = injectedScenario.connectionState === 'connected' ? injectedScenario.account : undefined;
+    const methodOutcomes = new Map(injectedScenario.methodOutcomes.map((outcome) => [outcome.method, outcome]));
     const provider = {
       isMetaMask: true,
-      selectedAddress: injectedAccount,
-      chainId: injectedChainIdHex,
+      selectedAddress: connectedAccount ?? null,
+      chainId: supportedChainIdHex,
       networkVersion,
       async request({ method, params }: { method: string; params?: Array<{ chainId?: string }> }) {
+        const scriptedOutcome = methodOutcomes.get(method);
+        if (scriptedOutcome?.type === 'resolve') return scriptedOutcome.value;
+        if (scriptedOutcome?.type === 'reject') {
+          const error = new Error(scriptedOutcome.error?.message ?? `Deterministic wallet scenario rejected ${method}.`);
+          (error as Error & { code?: number }).code = scriptedOutcome.error?.code;
+          throw error;
+        }
+
         switch (method) {
-          case 'eth_requestAccounts':
           case 'eth_accounts':
-            provider.selectedAddress = injectedAccount;
-            emit('accountsChanged', [injectedAccount]);
-            return [injectedAccount];
+            if (!connectedAccount) return [];
+            provider.selectedAddress = connectedAccount;
+            emit('accountsChanged', [connectedAccount]);
+            return [connectedAccount];
+          case 'eth_requestAccounts':
+            if (!connectedAccount) return [];
+            provider.selectedAddress = connectedAccount;
+            emit('accountsChanged', [connectedAccount]);
+            return [connectedAccount];
           case 'eth_chainId':
-            return injectedChainIdHex;
+            return supportedChainIdHex;
           case 'net_version':
             return networkVersion;
           case 'wallet_switchEthereumChain': {
             const requestedChainId = params?.[0]?.chainId?.toLowerCase();
-            if (requestedChainId && requestedChainId !== injectedChainIdHex) {
-              const error = new Error(`Deterministic injected wallet only supports chain ${injectedChainIdHex}.`);
+            if (requestedChainId && requestedChainId !== supportedChainIdHex) {
+              const error = new Error(`Deterministic wallet scenario only supports chain ${supportedChainIdHex}.`);
               (error as Error & { code?: number }).code = 4902;
               throw error;
             }
-            provider.chainId = injectedChainIdHex;
-            emit('chainChanged', injectedChainIdHex);
+            provider.chainId = supportedChainIdHex;
+            emit('chainChanged', supportedChainIdHex);
             return null;
           }
           case 'wallet_addEthereumChain':
             return null;
           default:
-            throw new Error(`Unsupported deterministic injected wallet method: ${method}`);
+            throw new Error(`Unsupported deterministic wallet scenario method: ${method}`);
         }
       },
       on(event: string, listener: (payload: unknown) => void) {
@@ -424,7 +574,33 @@ export async function installDeterministicInjectedWallet(
       configurable: true,
       value: provider
     });
-  }, { account, chainIdHex });
+
+    const eip6963Global = globalThis as typeof globalThis & {
+      addEventListener?: (event: string, listener: () => void) => void;
+      dispatchEvent?: (event: unknown) => boolean;
+      CustomEvent?: new (type: string, init?: { detail?: unknown }) => unknown;
+    };
+    if (injectedScenario.providerInfo && eip6963Global.addEventListener && eip6963Global.dispatchEvent && eip6963Global.CustomEvent) {
+      const info = { walletId: 'io.metamask', name: 'MetaMask', ...injectedScenario.providerInfo };
+      eip6963Global.addEventListener('eip6963:requestProvider', () => {
+        eip6963Global.dispatchEvent?.(new eip6963Global.CustomEvent!('eip6963:announceProvider', { detail: { info, provider } }));
+      });
+    }
+  }, normalizedScenario);
+}
+
+export async function installDeterministicInjectedWallet(
+  page: DeterministicInjectedWalletPage,
+  options: DeterministicInjectedWalletOptions
+): Promise<void> {
+  return installWalletScenario(
+    page,
+    walletScenario()
+      .connected({ account: options.account })
+      .withChain(options.chainId)
+      .withProviderInfo({ walletId: 'io.metamask', name: 'MetaMask' })
+      .build()
+  );
 }
 
 export const test = base.extend<WalletQaFixtures, WalletQaWorkerFixtures>({
