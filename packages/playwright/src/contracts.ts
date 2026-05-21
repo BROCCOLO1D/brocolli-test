@@ -4,10 +4,17 @@ import { basename, join } from 'node:path';
 
 import { expect, test as base, type Page, type TestInfo } from '@playwright/test';
 
+import { installWalletScenario, walletScenario } from './index.js';
+
 export interface WalletContractAssertionInput {
   page: Page;
   route: WalletContractRoute;
   testInfo: TestInfo;
+}
+
+export interface WalletContractConnectedInput extends WalletContractAssertionInput {
+  account: string;
+  chainId: string | number;
 }
 
 export interface WalletContractRoute {
@@ -23,10 +30,15 @@ export interface WalletContractTestsOptions {
   expectedChainId: string | number;
   expectedAccount: string;
   routes: WalletContractRoute[];
+  connect?: (input: WalletContractAssertionInput) => Promise<void>;
+  assertDisconnected?: (input: WalletContractAssertionInput) => Promise<void>;
+  assertConnected?: (input: WalletContractConnectedInput) => Promise<void>;
+  assertWrongChain?: (input: WalletContractAssertionInput) => Promise<void>;
+  assertInvalidAccount?: (input: WalletContractAssertionInput) => Promise<void>;
   test?: typeof base;
 }
 
-export type WalletContractScenario = 'disconnected';
+export type WalletContractScenario = 'disconnected' | 'connected' | 'wrong-chain' | 'invalid-account';
 
 export interface WalletContractRow {
   title: string;
@@ -37,15 +49,46 @@ export interface WalletContractRow {
 }
 
 export function createWalletContractRows(options: WalletContractTestsOptions): WalletContractRow[] {
-  return options.routes.map((route) => {
+  return options.routes.flatMap((route) => {
     const routeSlug = sanitizeContractSlug(route.name);
-    return {
-      title: `${options.appName} wallet contract: ${routeSlug} renders disconnected wallet affordance`,
-      scenario: 'disconnected',
-      route,
-      url: new URL(route.path, ensureTrailingSlash(options.baseUrl)).toString(),
-      artifactBasename: `contract-${routeSlug}-disconnected`
-    };
+    const url = new URL(route.path, ensureTrailingSlash(options.baseUrl)).toString();
+    const rows: WalletContractRow[] = [
+      {
+        title: `${options.appName} wallet contract: ${routeSlug} renders disconnected wallet affordance`,
+        scenario: 'disconnected',
+        route,
+        url,
+        artifactBasename: `contract-${routeSlug}-disconnected`
+      }
+    ];
+    if (options.assertConnected) {
+      rows.push({
+        title: `${options.appName} wallet contract: ${routeSlug} shows connected wallet state`,
+        scenario: 'connected',
+        route,
+        url,
+        artifactBasename: `contract-${routeSlug}-connected`
+      });
+    }
+    if (options.assertWrongChain) {
+      rows.push({
+        title: `${options.appName} wallet contract: ${routeSlug} fails closed on wrong chain`,
+        scenario: 'wrong-chain',
+        route,
+        url,
+        artifactBasename: `contract-${routeSlug}-wrong-chain`
+      });
+    }
+    if (options.assertInvalidAccount) {
+      rows.push({
+        title: `${options.appName} wallet contract: ${routeSlug} fails closed on invalid account`,
+        scenario: 'invalid-account',
+        route,
+        url,
+        artifactBasename: `contract-${routeSlug}-invalid-account`
+      });
+    }
+    return rows;
   });
 }
 
@@ -117,13 +160,30 @@ export function walletContractTests(options: WalletContractTestsOptions): void {
       let assertionSummary = row.route.walletAffordance ? 'wallet affordance visible' : 'route assertion completed';
       let failure: unknown;
       try {
+        await installScenarioForRow(page, row, options);
         await page.goto(row.url);
         if (row.route.walletAffordance instanceof RegExp) {
           await expect(page.getByText(row.route.walletAffordance).first()).toBeVisible();
         } else if (row.route.walletAffordance) {
           await expect(page.getByText(row.route.walletAffordance).first()).toBeVisible();
         }
-        await row.route.assert?.({ page, route: row.route, testInfo });
+        const assertionInput = { page, route: row.route, testInfo };
+        await row.route.assert?.(assertionInput);
+        if (row.scenario === 'disconnected') {
+          await options.assertDisconnected?.(assertionInput);
+        } else if (row.scenario === 'connected') {
+          await options.connect?.(assertionInput);
+          await options.assertConnected?.({ ...assertionInput, account: options.expectedAccount, chainId: options.expectedChainId });
+          assertionSummary = 'connected wallet state visible';
+        } else if (row.scenario === 'wrong-chain') {
+          await options.connect?.(assertionInput);
+          await options.assertWrongChain?.(assertionInput);
+          assertionSummary = 'wrong-chain state failed closed';
+        } else if (row.scenario === 'invalid-account') {
+          await options.connect?.(assertionInput);
+          await options.assertInvalidAccount?.(assertionInput);
+          assertionSummary = 'invalid-account state failed closed';
+        }
       } catch (error) {
         status = 'failed';
         assertionSummary = error instanceof Error ? error.message : 'wallet contract assertion failed';
@@ -145,6 +205,37 @@ export function walletContractTests(options: WalletContractTestsOptions): void {
       if (failure) throw failure;
     });
   }
+}
+
+async function installScenarioForRow(page: Page, row: WalletContractRow, options: WalletContractTestsOptions): Promise<void> {
+  if (row.scenario === 'disconnected') {
+    await installWalletScenario(page, walletScenario().disconnected().withChain(options.expectedChainId).build());
+    return;
+  }
+  if (row.scenario === 'connected') {
+    await installWalletScenario(page, walletScenario().connected({ account: options.expectedAccount }).withChain(options.expectedChainId).build());
+    return;
+  }
+  if (row.scenario === 'wrong-chain') {
+    await installWalletScenario(page, walletScenario().connected({ account: options.expectedAccount }).withChain(nextDifferentChainId(options.expectedChainId)).build());
+    return;
+  }
+  await installWalletScenario(
+    page,
+    walletScenario()
+      .disconnected()
+      .withChain(options.expectedChainId)
+      .rejectsMethod('eth_requestAccounts', { code: 4001, message: 'Deterministic wallet scenario rejected account request.' })
+      .build()
+  );
+}
+
+function nextDifferentChainId(chainId: string | number): number {
+  if (typeof chainId === 'number') return chainId === 1 ? 2 : chainId + 1;
+  const normalized = chainId.trim().toLowerCase();
+  const parsed = normalized.startsWith('0x') ? Number.parseInt(normalized.slice(2), 16) : Number.parseInt(normalized, 10);
+  if (!Number.isSafeInteger(parsed) || parsed <= 0) throw new Error('Wallet contract expectedChainId must be a positive chain ID.');
+  return parsed === 1 ? 2 : parsed + 1;
 }
 
 function ensureTrailingSlash(baseUrl: string): string {

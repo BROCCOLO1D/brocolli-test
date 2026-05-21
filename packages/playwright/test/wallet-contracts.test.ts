@@ -13,7 +13,7 @@ describe('wallet contract tests entrypoint', () => {
     expect(walletContractTests).toBeTypeOf('function');
   });
 
-  it('creates stable disconnected route smoke rows owned by app selectors', () => {
+  it('creates stable wallet state rows owned by app selectors', () => {
     const rows = createWalletContractRows({
       appName: 'Wildcat',
       baseUrl: 'http://127.0.0.1:3000',
@@ -22,7 +22,10 @@ describe('wallet contract tests entrypoint', () => {
       routes: [
         { name: 'lender', path: '/lender', walletAffordance: /connect|wallet/i },
         { name: 'borrower policy', path: '/borrower/policy', walletAffordance: 'Connect Wallet' }
-      ]
+      ],
+      assertConnected: async () => {},
+      assertWrongChain: async () => {},
+      assertInvalidAccount: async () => {}
     });
 
     expect(rows).toEqual([
@@ -34,12 +37,30 @@ describe('wallet contract tests entrypoint', () => {
         artifactBasename: 'contract-lender-disconnected'
       }),
       expect.objectContaining({
+        title: 'Wildcat wallet contract: lender shows connected wallet state',
+        scenario: 'connected',
+        artifactBasename: 'contract-lender-connected'
+      }),
+      expect.objectContaining({
+        title: 'Wildcat wallet contract: lender fails closed on wrong chain',
+        scenario: 'wrong-chain',
+        artifactBasename: 'contract-lender-wrong-chain'
+      }),
+      expect.objectContaining({
+        title: 'Wildcat wallet contract: lender fails closed on invalid account',
+        scenario: 'invalid-account',
+        artifactBasename: 'contract-lender-invalid-account'
+      }),
+      expect.objectContaining({
         title: 'Wildcat wallet contract: borrower-policy renders disconnected wallet affordance',
         scenario: 'disconnected',
         route: { name: 'borrower policy', path: '/borrower/policy', walletAffordance: 'Connect Wallet' },
         url: 'http://127.0.0.1:3000/borrower/policy',
         artifactBasename: 'contract-borrower-policy-disconnected'
-      })
+      }),
+      expect.objectContaining({ scenario: 'connected', artifactBasename: 'contract-borrower-policy-connected' }),
+      expect.objectContaining({ scenario: 'wrong-chain', artifactBasename: 'contract-borrower-policy-wrong-chain' }),
+      expect.objectContaining({ scenario: 'invalid-account', artifactBasename: 'contract-borrower-policy-invalid-account' })
     ]);
   });
 
@@ -98,6 +119,7 @@ describe('wallet contract tests entrypoint', () => {
       registered.push({ title, run });
     }) as never;
     const page = {
+      async addInitScript() {},
       async goto() {},
       async screenshot({ path }: { path: string }) {
         await writeFile(path, 'failed png bytes');

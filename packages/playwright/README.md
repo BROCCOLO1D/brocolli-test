@@ -234,11 +234,24 @@ walletContractTests({
         await expect(page.getByRole('button', { name: /connect/i })).toBeVisible();
       }
     }
-  ]
+  ],
+  connect: async ({ page }) => {
+    await page.getByRole('button', { name: /connect/i }).click();
+    await page.getByText(/metamask/i).click();
+  },
+  assertConnected: async ({ page, account }) => {
+    await expect(page.getByText(account.slice(0, 6), { exact: false })).toBeVisible();
+  },
+  assertWrongChain: async ({ page }) => {
+    await expect(page.getByText(/wrong network|switch network/i)).toBeVisible();
+  },
+  assertInvalidAccount: async ({ page }) => {
+    await expect(page.getByText(/connect|not connected/i)).toBeVisible();
+  }
 });
 ```
 
-Each generated row captures a full-page screenshot and writes structured evidence in the Playwright test output directory:
+Each generated row captures a full-page screenshot and writes structured evidence in the Playwright test output directory. The disconnected route row is always emitted; passing `assertConnected`, `assertWrongChain`, or `assertInvalidAccount` opt into connected, wrong-chain, and invalid-account rows backed by deterministic `walletScenario()` provider states.
 
 - `${artifactBasename}.png` screenshot;
 - `${artifactBasename}.json` manifest with schema/version, app, route, scenario, chain, masked account, screenshot hash/size, and pass/fail status;
