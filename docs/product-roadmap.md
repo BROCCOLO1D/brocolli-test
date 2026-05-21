@@ -236,9 +236,9 @@ Agents should not receive raw secrets, full profiles, full wallet addresses, or 
 
 ## Immediate progression steps
 
-1. **Harden app-owned fixtures.** Expand consumer tests for connect, wrong-chain, wrong-account, signature, and capped transaction cases.
-2. **Generalize policy helpers.** Keep reusable origin/chain/account/value checks in package APIs while selectors and dapp assertions stay in consumer repos.
-3. **Expand negative fixtures.** Cover wrong origin, wrong chain, bad account, unexpected prompt, and unsafe transaction value.
-4. **Add prompt classifier tests.** Use fake Playwright pages to cover connect/network/sign/transaction/unknown prompt text without launching MetaMask in CI.
-5. **Document conservative CI.** Provide a GitHub Actions example for fixture connect QA with Xvfb and secret-backed burner config.
-6. **Then expand beyond connect.** Add signature QA, then zero-value/capped transaction QA, only after connect QA is stable and policy-gated.
+0. **Build the next killer-feature pair.** Follow [`docs/plans/2026-05-21-wallet-contract-tests-and-scenarios.md`](./plans/2026-05-21-wallet-contract-tests-and-scenarios.md): first ship `walletScenario()` / `installWalletScenario()` for declarative deterministic wallet states, then ship `walletContractTests()` for reusable dapp wallet contract rows.
+1. **Use scenario builder as the foundation.** Cover disconnected, connected, wrong-chain, invalid-account, rejected signature, pending/rejected transaction, and optional EIP-6963 discovery states without real wallet secrets.
+2. **Make contract tests evidence-producing by default.** Every route/state row must write a screenshot, structured manifest, and artifact-index entry; selector/modal assertions remain consumer-owned.
+3. **Adopt in Wildcat as the first real consumer.** After package tests/docs pass, replace/augment bespoke Wildcat wallet smoke coverage with the public scenario/contract-test APIs.
+4. **Keep smoke vs proof wording strict.** Scenario and contract rows are CI-safe UI smoke unless paired with private-key-backed real MetaMask/test-wallet proof.
+5. **Continue policy hardening through the new APIs.** Preserve fail-closed origin/account/chain/prompt behavior; do not add transaction approval until explicit capped/zero-value policy and rejection tests exist.
