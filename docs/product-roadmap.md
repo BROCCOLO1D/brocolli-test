@@ -76,11 +76,24 @@ walletContractTests({
     assert: async ({ page }) => {
       await expect(page.getByRole('button', { name: /connect/i })).toBeVisible();
     }
-  }]
+  }],
+  connect: async ({ page }) => {
+    await page.getByRole('button', { name: /connect/i }).click();
+    await page.getByText(/metamask/i).click();
+  },
+  assertConnected: async ({ page, account }) => {
+    await expect(page.getByText(account.slice(0, 6), { exact: false })).toBeVisible();
+  },
+  assertWrongChain: async ({ page }) => {
+    await expect(page.getByText(/wrong network|switch network/i)).toBeVisible();
+  },
+  assertInvalidAccount: async ({ page }) => {
+    await expect(page.getByText(/connect|not connected/i)).toBeVisible();
+  }
 });
 ```
 
-Each generated contract row writes a screenshot, a public-safe row manifest, and `wallet-contract-artifact-index.json`; failed app-owned assertions still emit failed evidence before the original error is rethrown.
+Each generated contract row writes a screenshot, a public-safe row manifest, and `wallet-contract-artifact-index.json`; failed app-owned assertions still emit failed evidence before the original error is rethrown. The route/disconnected row is always generated, and app-provided connected, wrong-chain, and invalid-account callbacks opt into deterministic scenario-backed state rows without moving selectors or UI expectations into the package.
 
 The existing fixture flow remains app-owned:
 
