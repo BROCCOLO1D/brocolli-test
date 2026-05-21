@@ -42,8 +42,8 @@ function runInjectedWalletScript(initScript: WalletScenarioInitScript, initArgs:
 }
 
 describe('@broccolo1d/playwright exports', () => {
-  it('declares a registry-safe wallet-browser dependency for plain npm publish', () => {
-    expect(packageJson.dependencies['@broccolo1d/wallet-browser']).toBe('^0.2.8');
+  it('declares a registry-safe wallet-browser dependency aligned with the published workspace release', () => {
+    expect(packageJson.dependencies['@broccolo1d/wallet-browser']).toBe(`^${walletBrowserPackageJson.version}`);
   });
 
   it('keeps root README package versions aligned with package.json releases', async () => {

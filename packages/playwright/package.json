@@ -54,7 +54,7 @@
     "@playwright/test": "^1.59.1"
   },
   "dependencies": {
-    "@broccolo1d/wallet-browser": "^0.2.8"
+    "@broccolo1d/wallet-browser": "^0.2.9"
   },
   "devDependencies": {
     "@playwright/test": "1.59.1",

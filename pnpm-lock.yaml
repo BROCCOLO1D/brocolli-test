@@ -24,8 +24,8 @@ importers:
   packages/playwright:
     dependencies:
       '@broccolo1d/wallet-browser':
-        specifier: ^0.2.8
-        version: 0.2.8
+        specifier: ^0.2.9
+        version: 0.2.9
     devDependencies:
       '@playwright/test':
         specifier: 1.59.1
@@ -45,8 +45,8 @@ importers:
 
 packages:
 
-  '@broccolo1d/wallet-browser@0.2.8':
-    resolution: {integrity: sha512-fhxpeNYX3HmFa6ywN+NQ6NaULFWea5SLsk4QGRXGE8KWSfAoYQI0zoDhntiXh4NgTASYaEyKeJOaFYxhqG7x3g==}
+  '@broccolo1d/wallet-browser@0.2.9':
+    resolution: {integrity: sha512-g8WYPDSqdj2V3cw20q8Dw0Ftk2YF6g+cuv9rGpw1povDDhXKfPSOoMWQb8YewfIrFhKDBwF967GtSIivaIFxFA==}
     engines: {node: '>=22.0.0 <23.0.0'}
     hasBin: true
 
@@ -509,7 +509,7 @@ packages:
 
 snapshots:
 
-  '@broccolo1d/wallet-browser@0.2.8':
+  '@broccolo1d/wallet-browser@0.2.9':
     dependencies:
       playwright: 1.59.1
 
