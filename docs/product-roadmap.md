@@ -245,7 +245,7 @@ Acceptance:
 
 ### 6. CI packaging — in progress
 
-Make secret-backed CI usage practical but conservative. The artifact index, stable Playwright annotations, prompt/action decision records, and [`docs/ci-artifact-review.md`](./ci-artifact-review.md) runbook now cover the reviewed-evidence upload path.
+Make secret-backed CI usage practical but conservative. The artifact index, stable Playwright annotations, prompt/action decision records, and [`docs/ci-artifact-review.md`](./ci-artifact-review.md) runbook now cover the reviewed-evidence upload path. Package-consumer validation now includes `npm run verify:playwright-consumer`, which packs the workspace packages into a temporary TypeScript app and verifies public imports from the root Playwright entrypoint and the `@broccolo1d/playwright/contracts` subpath before downstream adoption.
 
 Acceptance:
 
