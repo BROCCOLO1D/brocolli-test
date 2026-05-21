@@ -2,6 +2,7 @@ import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 
 import packageJson from '../package.json';
+import walletBrowserPackageJson from '../../wallet-browser/package.json';
 import { defineWalletQaConfig, installDeterministicInjectedWallet, installWalletScenario, test, walletScenario } from '../src/index.js';
 import type { DeterministicInjectedWalletPage, WalletScenarioState } from '../src/index.js';
 
@@ -43,6 +44,13 @@ function runInjectedWalletScript(initScript: WalletScenarioInitScript, initArgs:
 describe('@broccolo1d/playwright exports', () => {
   it('declares a registry-safe wallet-browser dependency for plain npm publish', () => {
     expect(packageJson.dependencies['@broccolo1d/wallet-browser']).toBe('^0.2.8');
+  });
+
+  it('keeps root README package versions aligned with package.json releases', async () => {
+    const rootReadme = await readFile(new URL('../../../README.md', import.meta.url), 'utf8');
+
+    expect(rootReadme).toContain(`@broccolo1d/wallet-browser\`](packages/wallet-browser/README.md) | \`${walletBrowserPackageJson.version}\``);
+    expect(rootReadme).toContain(`@broccolo1d/playwright\`](packages/playwright/README.md) | \`${packageJson.version}\``);
   });
 
   it('keeps the published dist provenance version aligned with package.json', async () => {
