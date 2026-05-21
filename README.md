@@ -246,9 +246,10 @@ pnpm wallet:smoke:verify .wallet-artifacts/metamask-smoke/<run-id>
 ```bash
 pnpm --filter @broccolo1d/wallet-browser pack --dry-run
 pnpm --filter @broccolo1d/playwright pack --dry-run
+npm run verify:playwright-consumer
 ```
 
-Tarballs include package README files, the root license, package metadata, and built `dist/` output.
+Tarballs include package README files, the root license, package metadata, and built `dist/` output. `npm run verify:playwright-consumer` builds the Playwright package, packs both workspace packages, installs the tarballs into a temporary ESM TypeScript consumer, and typechecks public imports from both `@broccolo1d/playwright` and `@broccolo1d/playwright/contracts`. It does not use wallet secrets or publish packages.
 
 ## Safety model
 
