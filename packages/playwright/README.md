@@ -211,6 +211,41 @@ await installWalletScenario(
 
 A wrong-chain smoke is just a connected scenario on a non-target chain plus dapp-owned assertions that the UI fails closed. Optional EIP-6963 metadata announces the provider after `eip6963:requestProvider`; omit `withProviderInfo()` for legacy `window.ethereum`-only tests. `installDeterministicInjectedWallet(page, { account, chainId })` remains available and delegates to the connected scenario defaults.
 
+## Wallet contract tests
+
+`@broccolo1d/playwright/contracts` provides `walletContractTests()` for reusable dapp wallet contract rows. The package owns stable route/state row generation and evidence writing; the downstream app still owns selectors, routes, modal behavior, and assertions. Contract rows are CI-safe UI smoke unless paired separately with private-key-backed wallet proof.
+
+```ts
+import { expect, test } from '@broccolo1d/playwright';
+import { walletContractTests } from '@broccolo1d/playwright/contracts';
+
+walletContractTests({
+  appName: 'Wildcat',
+  baseUrl: process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3000',
+  expectedChainId: 11155111,
+  expectedAccount: process.env.SEPOLIA_WALLET_ADDRESS!,
+  test,
+  routes: [
+    {
+      name: 'lender',
+      path: '/lender',
+      walletAffordance: /connect|wallet/i,
+      assert: async ({ page }) => {
+        await expect(page.getByRole('button', { name: /connect/i })).toBeVisible();
+      }
+    }
+  ]
+});
+```
+
+Each generated row captures a full-page screenshot and writes structured evidence in the Playwright test output directory:
+
+- `${artifactBasename}.png` screenshot;
+- `${artifactBasename}.json` manifest with schema/version, app, route, scenario, chain, masked account, screenshot hash/size, and pass/fail status;
+- `wallet-contract-artifact-index.json` for CI upload/review.
+
+If a dapp-owned assertion fails, the row still captures screenshot + failed manifest + artifact index before rethrowing the original assertion error. Public manifests reject full expected-account leaks and absolute local artifact paths.
+
 ## Helpers
 
 - `defineWalletQaConfig(config)`: typed Playwright config wrapper for wallet QA fixtures.

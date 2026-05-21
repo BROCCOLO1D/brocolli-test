@@ -41,7 +41,7 @@ pnpm add -D @broccolo1d/wallet-browser@0.2.9 playwright
 
 ### Playwright fixture layer
 
-`@broccolo1d/playwright` now includes the first half of the killer-feature pair: a declarative wallet scenario builder for deterministic CI-safe dapp UI states.
+`@broccolo1d/playwright` now includes the first killer-feature pair: a declarative wallet scenario builder for deterministic CI-safe dapp UI states, plus importable wallet contract-test rows for app-owned route assertions with package-owned evidence output.
 
 ```ts
 import { expect, installWalletScenario, test, verifyWalletQaProofManifest, walletScenario } from '@broccolo1d/playwright';
@@ -57,7 +57,30 @@ await installWalletScenario(
 );
 ```
 
-Scenario-builder rows are UI smoke only unless paired with an actual private-key-backed wallet proof. Consumer suites still need to capture screenshot + structured manifest + artifact-index evidence for each route/state row.
+Scenario-builder rows are UI smoke only unless paired with an actual private-key-backed wallet proof. Consumer suites still need to capture screenshot + structured manifest + artifact-index evidence for each route/state row. The contract-test entrypoint makes that evidence contract reusable while leaving selectors and assertions in the consumer app:
+
+```ts
+import { expect, test } from '@broccolo1d/playwright';
+import { walletContractTests } from '@broccolo1d/playwright/contracts';
+
+walletContractTests({
+  appName: 'Wildcat',
+  baseUrl: process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3000',
+  expectedChainId: 11155111,
+  expectedAccount: process.env.SEPOLIA_WALLET_ADDRESS!,
+  test,
+  routes: [{
+    name: 'lender',
+    path: '/lender',
+    walletAffordance: /connect|wallet/i,
+    assert: async ({ page }) => {
+      await expect(page.getByRole('button', { name: /connect/i })).toBeVisible();
+    }
+  }]
+});
+```
+
+Each generated contract row writes a screenshot, a public-safe row manifest, and `wallet-contract-artifact-index.json`; failed app-owned assertions still emit failed evidence before the original error is rethrown.
 
 The existing fixture flow remains app-owned:
 
@@ -256,7 +279,7 @@ Agents should not receive raw secrets, full profiles, full wallet addresses, or 
 
 ## Immediate progression steps
 
-0. **Build the next killer-feature pair.** Follow [`docs/plans/2026-05-21-wallet-contract-tests-and-scenarios.md`](./plans/2026-05-21-wallet-contract-tests-and-scenarios.md): `walletScenario()` / `installWalletScenario()` now cover the declarative deterministic wallet-state foundation; next ship `walletContractTests()` for reusable dapp wallet contract rows.
+0. **Adopt the killer-feature pair in Wildcat.** Follow [`docs/plans/2026-05-21-wallet-contract-tests-and-scenarios.md`](./plans/2026-05-21-wallet-contract-tests-and-scenarios.md): `walletScenario()` / `installWalletScenario()` cover the declarative deterministic wallet-state foundation, and `@broccolo1d/playwright/contracts` now provides `walletContractTests()` for reusable disconnected route/state smoke rows with screenshot + manifest + artifact-index evidence.
 1. **Use scenario builder as the foundation.** Apply the new disconnected, connected, wrong-chain, rejected signature/transaction, and optional EIP-6963 discovery states in package-level contract rows and downstream consumer tests without real wallet secrets.
 2. **Make contract tests evidence-producing by default.** Every route/state row must write a screenshot, structured manifest, and artifact-index entry; selector/modal assertions remain consumer-owned.
 3. **Adopt in Wildcat as the first real consumer.** After package tests/docs pass, replace/augment bespoke Wildcat wallet smoke coverage with the public scenario/contract-test APIs.
