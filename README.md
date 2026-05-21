@@ -12,7 +12,8 @@
 ## What it gives a dapp team
 
 - Policy-gated wallet actions for connect, chain checks, and signatures.
-- Deterministic injected-wallet smoke tests for CI-safe app coverage.
+- Declarative `walletScenario()` / `installWalletScenario()` states for disconnected, connected, wrong-chain, rejected/pending method, and optional EIP-6963 discovery smoke coverage.
+- Reusable `@broccolo1d/playwright/contracts` route/state rows that keep selectors app-owned while writing screenshot + manifest + artifact-index evidence.
 - Optional private-key-backed MetaMask flows for local/testnet proof capture.
 - Public-safe proof manifests, screenshots, and artifact indexes for review.
 - Fail-closed prompt/network guards so unknown prompts are not clicked by default.
@@ -102,7 +103,7 @@ The index records manifest digests, masked account/chain/origin summaries, attac
 | Package | Version | Purpose |
 | --- | ---: | --- |
 | [`@broccolo1d/wallet-browser`](packages/wallet-browser/README.md) | `0.2.9` | Core browser automation for MetaMask integration with Chromium context management and wallet state verification. |
-| [`@broccolo1d/playwright`](packages/playwright/README.md) | `0.2.9` | Playwright test fixtures and utilities for wallet-integrated dapp testing with structured proof artifacts. |
+| [`@broccolo1d/playwright`](packages/playwright/README.md) | `0.2.10` | Playwright test fixtures, deterministic wallet scenarios, reusable dapp contract rows, and structured proof artifacts. |
 
 ## Runtime model
 
