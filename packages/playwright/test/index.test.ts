@@ -2,8 +2,43 @@ import { readFile } from 'node:fs/promises';
 import { describe, expect, it } from 'vitest';
 
 import packageJson from '../package.json';
-import { defineWalletQaConfig, installDeterministicInjectedWallet, test } from '../src/index.js';
-import type { DeterministicInjectedWalletPage } from '../src/index.js';
+import { defineWalletQaConfig, installDeterministicInjectedWallet, installWalletScenario, test, walletScenario } from '../src/index.js';
+import type { DeterministicInjectedWalletPage, WalletScenarioState } from '../src/index.js';
+
+type TestEthereumProvider = {
+  request(input: { method: string; params?: unknown[] }): Promise<unknown>;
+  on(event: string, listener: unknown): void;
+};
+
+type WalletScenarioInitScript = (args: WalletScenarioState) => void;
+
+async function recordWalletScenarioInstall(scenario: WalletScenarioState): Promise<{ initScript: WalletScenarioInitScript; initArgs: WalletScenarioState }> {
+  let initScript: WalletScenarioInitScript | undefined;
+  let initArgs: WalletScenarioState | undefined;
+  const page = {
+    async addInitScript(script: WalletScenarioInitScript, args: WalletScenarioState) {
+      initScript = script;
+      initArgs = args;
+    }
+  } as unknown as DeterministicInjectedWalletPage;
+
+  await installWalletScenario(page, scenario);
+
+  if (!initScript || !initArgs) throw new Error('Expected wallet scenario init script to be recorded.');
+  return { initScript, initArgs };
+}
+
+function runInjectedWalletScript(initScript: WalletScenarioInitScript, initArgs: WalletScenarioState): { ethereum: TestEthereumProvider; restore: () => void } {
+  const testGlobal = globalThis as typeof globalThis & { ethereum?: TestEthereumProvider };
+  const previousEthereum = testGlobal.ethereum;
+  initScript(initArgs);
+  if (!testGlobal.ethereum) throw new Error('Expected wallet scenario to install ethereum provider.');
+
+  return {
+    ethereum: testGlobal.ethereum,
+    restore: () => Object.defineProperty(globalThis, 'ethereum', { configurable: true, value: previousEthereum })
+  };
+}
 
 describe('@broccolo1d/playwright exports', () => {
   it('declares a registry-safe wallet-browser dependency for plain npm publish', () => {
@@ -35,11 +70,51 @@ describe('@broccolo1d/playwright exports', () => {
     );
   });
 
+  it('builds connected wallet scenarios with normalized account and chain state', () => {
+    const scenario = walletScenario()
+      .connected({ account: '0xAa000000000000000000000000000000000000Bb' })
+      .withChain(11155111)
+      .withProviderInfo({ walletId: 'io.metamask', name: 'MetaMask' })
+      .withTokenBalance({ symbol: 'USDC', amount: '1000' })
+      .withPendingTransaction({ hash: '0xabc123', label: 'borrower-approval' })
+      .build();
+
+    expect(scenario).toMatchObject({
+      account: '0xaa000000000000000000000000000000000000bb',
+      chainIdHex: '0xaa36a7',
+      connectionState: 'connected',
+      providerInfo: { walletId: 'io.metamask', name: 'MetaMask' },
+      tokenBalances: [{ symbol: 'USDC', amount: '1000' }],
+      pendingTransactions: [{ hash: '0xabc123', label: 'borrower-approval' }]
+    });
+  });
+
+  it('rejects invalid scenario accounts and chain ids', () => {
+    expect(() => walletScenario().connected({ account: '0x0000000000000000000000000000000000000000' })).toThrow(/non-zero ethereum address/i);
+    expect(() => walletScenario().connected({ account: 'not-an-address' })).toThrow(/non-zero ethereum address/i);
+    expect(() => walletScenario().withChain(0)).toThrow(/positive integer/i);
+    expect(() => walletScenario().withChain('not-a-chain')).toThrow(/positive integer/i);
+  });
+
+  it('installs disconnected wallet scenarios that return no eth_accounts', async () => {
+    const { initScript, initArgs } = await recordWalletScenarioInstall(walletScenario().disconnected().withChain('0xaa36a7').build());
+
+    expect(initArgs.connectionState).toBe('disconnected');
+
+    const { ethereum, restore } = runInjectedWalletScript(initScript, initArgs);
+    try {
+      await expect(ethereum.request({ method: 'eth_accounts' })).resolves.toEqual([]);
+      await expect(ethereum.request({ method: 'eth_chainId' })).resolves.toBe('0xaa36a7');
+    } finally {
+      restore();
+    }
+  });
+
   it('installs a deterministic injected wallet that answers account and chain requests', async () => {
-    let initScript: ((args: { account: string; chainIdHex: string }) => void) | undefined;
-    let initArgs: { account: string; chainIdHex: string } | undefined;
+    let initScript: ((args: WalletScenarioState) => void) | undefined;
+    let initArgs: WalletScenarioState | undefined;
     const page = {
-      async addInitScript(script: (args: { account: string; chainIdHex: string }) => void, args: { account: string; chainIdHex: string }) {
+      async addInitScript(script: (args: WalletScenarioState) => void, args: WalletScenarioState) {
         initScript = script;
         initArgs = args;
       }
@@ -50,27 +125,92 @@ describe('@broccolo1d/playwright exports', () => {
       chainId: 11155111
     });
 
-    expect(initArgs).toEqual({
+    expect(initArgs).toMatchObject({
       account: '0xaa000000000000000000000000000000000000bb',
-      chainIdHex: '0xaa36a7'
+      chainIdHex: '0xaa36a7',
+      connectionState: 'connected',
+      providerInfo: { walletId: 'io.metamask', name: 'MetaMask' }
     });
 
     const listeners: Record<string, unknown> = {};
-    const testGlobal = globalThis as typeof globalThis & { ethereum?: { request(input: { method: string; params?: unknown[] }): Promise<unknown>; on(event: string, listener: unknown): void } };
-    const previousEthereum = testGlobal.ethereum;
+    const { ethereum, restore } = runInjectedWalletScript(initScript!, initArgs!);
     try {
-      initScript?.(initArgs!);
-      testGlobal.ethereum?.on('accountsChanged', (accounts: string[]) => {
+      ethereum.on('accountsChanged', (accounts: string[]) => {
         listeners.accountsChanged = accounts;
       });
 
-      await expect(testGlobal.ethereum?.request({ method: 'eth_accounts' })).resolves.toEqual([
-        '0xaa000000000000000000000000000000000000bb'
-      ]);
-      await expect(testGlobal.ethereum?.request({ method: 'eth_chainId' })).resolves.toBe('0xaa36a7');
+      await expect(ethereum.request({ method: 'eth_accounts' })).resolves.toEqual(['0xaa000000000000000000000000000000000000bb']);
+      await expect(ethereum.request({ method: 'eth_chainId' })).resolves.toBe('0xaa36a7');
       expect(listeners.accountsChanged).toEqual(['0xaa000000000000000000000000000000000000bb']);
     } finally {
-      Object.defineProperty(globalThis, 'ethereum', { configurable: true, value: previousEthereum });
+      restore();
+    }
+  });
+
+  it('scripts deterministic wallet scenario method outcomes', async () => {
+    const scenario = walletScenario()
+      .connected({ account: '0xAa000000000000000000000000000000000000Bb' })
+      .withChain(11155111)
+      .rejectsMethod('personal_sign', { code: 4001, message: 'User rejected request.' })
+      .resolvesMethod('eth_sendTransaction', '0x1234')
+      .build();
+
+    const { initScript, initArgs } = await recordWalletScenarioInstall(scenario);
+    const { ethereum, restore } = runInjectedWalletScript(initScript, initArgs);
+    try {
+      await expect(ethereum.request({ method: 'personal_sign' })).rejects.toMatchObject({ code: 4001, message: 'User rejected request.' });
+      await expect(ethereum.request({ method: 'eth_sendTransaction' })).resolves.toBe('0x1234');
+    } finally {
+      restore();
+    }
+  });
+
+  it('announces wallet scenarios through optional EIP-6963 provider metadata', async () => {
+    const scenario = walletScenario()
+      .connected({ account: '0xAa000000000000000000000000000000000000Bb' })
+      .withChain(11155111)
+      .withProviderInfo({ walletId: 'io.metamask', name: 'MetaMask', rdns: 'io.metamask' })
+      .build();
+
+    const { initScript, initArgs } = await recordWalletScenarioInstall(scenario);
+    const announcements: Array<{ detail: { info: { walletId?: string; name?: string; rdns?: string }; provider: unknown } }> = [];
+    const testGlobal = globalThis as typeof globalThis & {
+      addEventListener?: typeof globalThis.addEventListener;
+      dispatchEvent?: typeof globalThis.dispatchEvent;
+      CustomEvent?: typeof globalThis.CustomEvent;
+    };
+    const previousAddEventListener = testGlobal.addEventListener;
+    const previousDispatchEvent = testGlobal.dispatchEvent;
+    const previousCustomEvent = testGlobal.CustomEvent;
+    const eventListeners = new Map<string, Array<(event: { detail?: unknown }) => void>>();
+    testGlobal.addEventListener = ((event: string, listener: (event: { detail?: unknown }) => void) => {
+      eventListeners.set(event, [...(eventListeners.get(event) ?? []), listener]);
+    }) as typeof globalThis.addEventListener;
+    testGlobal.dispatchEvent = ((event: { type: string; detail?: unknown }) => {
+      if (event.type === 'eip6963:announceProvider') announcements.push(event as (typeof announcements)[number]);
+      for (const listener of eventListeners.get(event.type) ?? []) listener(event);
+      return true;
+    }) as typeof globalThis.dispatchEvent;
+    testGlobal.CustomEvent = class TestCustomEvent {
+      type: string;
+      detail?: unknown;
+      constructor(type: string, init?: { detail?: unknown }) {
+        this.type = type;
+        this.detail = init?.detail;
+      }
+    } as typeof globalThis.CustomEvent;
+
+    const { restore } = runInjectedWalletScript(initScript, initArgs);
+    try {
+      testGlobal.dispatchEvent?.(new CustomEvent('eip6963:requestProvider'));
+      expect(announcements).toHaveLength(1);
+      expect(announcements[0]?.detail.info).toMatchObject({ walletId: 'io.metamask', name: 'MetaMask', rdns: 'io.metamask' });
+      expect(announcements[0]?.detail.provider).toBe(testGlobal.ethereum);
+    } finally {
+      restore();
+      testGlobal.addEventListener = previousAddEventListener;
+      testGlobal.dispatchEvent = previousDispatchEvent;
+      testGlobal.CustomEvent = previousCustomEvent;
     }
   });
 });

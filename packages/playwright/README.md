@@ -177,10 +177,45 @@ Positive connected-wallet evidence must show the app running locally on the requ
 - `wallet`: `connect`, `expectConnected`, `expectChain`, `assertState`, `switchChain`, `signMessage`, `signTypedData`, and `maskAddress` helpers.
 - `walletArtifacts`: screenshot, JSON, connected-proof, proof-manifest, artifact-index, and failure-manifest writers.
 
+## Wallet scenario builder
+
+`walletScenario()` and `installWalletScenario(page, scenario)` install a deterministic EIP-1193 provider for CI-safe UI smoke tests. Use it when a dapp test needs to prove how the app reacts to provider state without loading MetaMask or private-key material. It is **not** private-key-backed connected-wallet proof; pair each consumer test row with normal screenshot + manifest + artifact-index output when publishing evidence.
+
+```ts
+import { installWalletScenario, walletScenario } from '@broccolo1d/playwright';
+
+await installWalletScenario(
+  page,
+  walletScenario()
+    .disconnected()
+    .withChain(11155111)
+    .withProviderInfo({ walletId: 'io.metamask', name: 'MetaMask' })
+    .build()
+);
+```
+
+Connected, wrong-chain, and rejected/pending method states stay app-owned at the assertion layer:
+
+```ts
+await installWalletScenario(
+  page,
+  walletScenario()
+    .connected({ account: '0x1111111111111111111111111111111111111111' })
+    .withChain('0xaa36a7')
+    .rejectsSignature({ code: 4001, message: 'User rejected signature request.' })
+    .resolvesMethod('eth_sendTransaction', '0x1234')
+    .withProviderInfo({ walletId: 'io.metamask', name: 'MetaMask', rdns: 'io.metamask' })
+    .build()
+);
+```
+
+A wrong-chain smoke is just a connected scenario on a non-target chain plus dapp-owned assertions that the UI fails closed. Optional EIP-6963 metadata announces the provider after `eip6963:requestProvider`; omit `withProviderInfo()` for legacy `window.ethereum`-only tests. `installDeterministicInjectedWallet(page, { account, chainId })` remains available and delegates to the connected scenario defaults.
+
 ## Helpers
 
 - `defineWalletQaConfig(config)`: typed Playwright config wrapper for wallet QA fixtures.
-- `installDeterministicInjectedWallet(page, { account, chainId })`: installs a minimal deterministic EIP-1193 provider with a non-zero public test account, `eth_accounts`/`eth_requestAccounts`, `eth_chainId`/`net_version`, and guarded chain-switch responses. Use this for dapp-owned smoke/proof tests that should verify connected UI without real private wallet material.
+- `walletScenario()` / `installWalletScenario(page, scenario)`: build and install deterministic disconnected, connected, wrong-chain, scripted signature/transaction outcome, and optional EIP-6963 provider states for CI-safe dapp UI smoke tests. This helper does not prove possession of a private key.
+- `installDeterministicInjectedWallet(page, { account, chainId })`: backwards-compatible connected scenario shortcut that installs a minimal deterministic EIP-1193 provider with a non-zero public test account, `eth_accounts`/`eth_requestAccounts`, `eth_chainId`/`net_version`, guarded chain-switch responses, and default MetaMask-compatible discovery metadata. Use this for dapp-owned smoke tests that should verify connected UI without real private wallet material.
 - `createFailClosedWalletPromptDriver(options)`: wraps explicit prompt automation and rejects missing handlers, missing/wrong origin, wrong account, or wrong chain.
 - `writeWalletQaProofManifest(options)`: writes a public schema v1 proof manifest with safe attachment metadata, provenance, summaries, checksums, optional prompt/action decisions, and redacted failures.
 - `verifyWalletQaProofManifest(artifactDir)`: verifies manifest shape, required schema v1 provenance, summary/checksum consistency, attachment hashes/sizes, and rejects full addresses, raw secrets/RPC tokens, local path leaks, and downgraded manifests without `schemaVersion`.
