@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 
 import { describe, expect, it } from 'vitest';
 
-import { createWalletContractRows, walletContractTests, writeWalletContractEvidence } from '../src/contracts.js';
+import { createWalletContractRows, verifyWalletContractManifest, walletContractTests, writeWalletContractEvidence } from '../src/contracts.js';
 
 const ACCOUNT = '0x1111111111111111111111111111111111111111';
 
@@ -110,6 +110,43 @@ describe('wallet contract tests entrypoint', () => {
       summary: { manifestCount: 1, screenshotCount: 1 },
       manifests: [{ file: 'contract-lender-disconnected.json', screenshot: 'contract-lender-disconnected.png', status: 'passed' }]
     });
+
+    const verified = await verifyWalletContractManifest(artifactDir, 'contract-lender-disconnected.json');
+    expect(verified).toMatchObject({
+      appName: 'Wildcat',
+      route: { name: 'lender', path: '/lender' },
+      scenario: 'disconnected',
+      screenshot: { file: 'contract-lender-disconnected.png', sizeBytes: 14 },
+      status: 'passed'
+    });
+  });
+
+  it('rejects contract manifests when screenshot evidence is missing or mutated', async () => {
+    const artifactDir = await mkdtemp(join(tmpdir(), 'wallet-contracts-mutated-'));
+    const screenshot = join(artifactDir, 'contract-lender-disconnected.png');
+    await writeFile(screenshot, 'original png bytes');
+    const [row] = createWalletContractRows({
+      appName: 'Wildcat',
+      baseUrl: 'http://127.0.0.1:3000',
+      expectedChainId: 11155111,
+      expectedAccount: ACCOUNT,
+      routes: [{ name: 'lender', path: '/lender' }]
+    });
+    await writeWalletContractEvidence({
+      artifactDir,
+      row,
+      appName: 'Wildcat',
+      expectedChainId: 11155111,
+      expectedAccount: ACCOUNT,
+      screenshotPath: screenshot,
+      status: 'passed'
+    });
+
+    await writeFile(screenshot, 'mutated png bytes!');
+
+    await expect(verifyWalletContractManifest(artifactDir, 'contract-lender-disconnected.json')).rejects.toThrow(
+      'Wallet contract manifest screenshot sha256 mismatch.'
+    );
   });
 
   it('writes failed row evidence before rethrowing app-owned assertion failures', async () => {

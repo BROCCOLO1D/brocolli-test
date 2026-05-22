@@ -275,13 +275,14 @@ Each generated row captures a full-page screenshot and writes structured evidenc
 - `${artifactBasename}.json` manifest with schema/version, app, route, scenario, chain, masked account, screenshot hash/size, and pass/fail status;
 - `wallet-contract-artifact-index.json` for CI upload/review.
 
-If a dapp-owned assertion fails, the row still captures screenshot + failed manifest + artifact index before rethrowing the original assertion error. Public manifests reject full expected-account leaks and absolute local artifact paths.
+Use `verifyWalletContractManifest(artifactDir, manifestName)` in CI or promotion scripts to re-read a contract manifest and verify the referenced screenshot basename, size, and SHA-256 checksum before publishing evidence. If a dapp-owned assertion fails, the row still captures screenshot + failed manifest + artifact index before rethrowing the original assertion error. Public manifests reject full expected-account leaks and absolute local artifact paths.
 
 ## Helpers
 
 - `defineWalletQaConfig(config)`: typed Playwright config wrapper for wallet QA fixtures.
 - `walletScenario()` / `installWalletScenario(page, scenario)`: build and install deterministic disconnected, connected, wrong-chain, scripted signature/transaction outcome, and optional EIP-6963 provider states for CI-safe dapp UI smoke tests. This helper does not prove possession of a private key.
 - `installDeterministicInjectedWallet(page, { account, chainId })`: backwards-compatible connected scenario shortcut that installs a minimal deterministic EIP-1193 provider with a non-zero public test account, `eth_accounts`/`eth_requestAccounts`, `eth_chainId`/`net_version`, guarded chain-switch responses, and default MetaMask-compatible discovery metadata. Use this for dapp-owned smoke tests that should verify connected UI without real private wallet material.
+- `verifyWalletContractManifest(artifactDir, manifestName)`: verifies wallet contract-test manifest shape plus the referenced screenshot basename, size, and SHA-256 checksum before CI artifact promotion or README screenshot review.
 - `createFailClosedWalletPromptDriver(options)`: wraps explicit prompt automation and rejects missing handlers, missing/wrong origin, wrong account, or wrong chain.
 - `writeWalletQaProofManifest(options)`: writes a public schema v1 proof manifest with safe attachment metadata, provenance, summaries, checksums, optional prompt/action decisions, and redacted failures.
 - `verifyWalletQaProofManifest(artifactDir)`: verifies manifest shape, required schema v1 provenance, summary/checksum consistency, attachment hashes/sizes, and rejects full addresses, raw secrets/RPC tokens, local path leaks, and downgraded manifests without `schemaVersion`.
