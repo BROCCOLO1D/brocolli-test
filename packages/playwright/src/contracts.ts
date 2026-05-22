@@ -108,6 +108,42 @@ export interface WalletContractEvidenceResult {
   indexPath: string;
 }
 
+export interface WalletContractManifest {
+  schemaVersion: 1;
+  artifactType: 'wallet-contract-test';
+  createdAt: string;
+  appName: string;
+  route: { name: string; path: string };
+  scenario: WalletContractScenario;
+  expectedChainId: string | number;
+  maskedExpectedAccount: string;
+  screenshot: { file: string; sizeBytes: number; sha256: string; contentType: 'image/png' };
+  status: 'passed' | 'failed';
+  assertionSummary?: string;
+}
+
+export async function verifyWalletContractManifest(artifactDir: string, manifestName: string): Promise<WalletContractManifest> {
+  assertSafeBasename(manifestName, 'manifest');
+  const manifestPath = join(artifactDir, manifestName);
+  const manifestText = await readFile(manifestPath, 'utf8');
+  if (manifestText.includes(artifactDir)) {
+    throw new Error('Wallet contract manifest must not expose local artifact paths.');
+  }
+  const manifest = parseWalletContractManifest(manifestText);
+  assertSafeBasename(manifest.screenshot.file, 'screenshot');
+  const screenshotPath = join(artifactDir, manifest.screenshot.file);
+  const bytes = await readFile(screenshotPath);
+  const fileStat = await stat(screenshotPath);
+  if (fileStat.size !== manifest.screenshot.sizeBytes) {
+    throw new Error('Wallet contract manifest screenshot size mismatch.');
+  }
+  const sha256 = createHash('sha256').update(bytes).digest('hex');
+  if (sha256 !== manifest.screenshot.sha256) {
+    throw new Error('Wallet contract manifest screenshot sha256 mismatch.');
+  }
+  return manifest;
+}
+
 export async function writeWalletContractEvidence(options: WalletContractEvidenceOptions): Promise<WalletContractEvidenceResult> {
   await mkdir(options.artifactDir, { recursive: true });
   const screenshotFile = basename(options.screenshotPath);
@@ -117,7 +153,7 @@ export async function writeWalletContractEvidence(options: WalletContractEvidenc
   assertSafeBasename(manifestFile, 'manifest');
   const bytes = await readFile(options.screenshotPath);
   const fileStat = await stat(options.screenshotPath);
-  const manifest = {
+  const manifest: WalletContractManifest = {
     schemaVersion: 1,
     artifactType: 'wallet-contract-test',
     createdAt: new Date().toISOString(),
@@ -260,6 +296,72 @@ function maskAccount(account: string): string {
     throw new Error('Wallet contract expectedAccount must be a non-zero Ethereum address.');
   }
   return `${normalized.slice(0, 6)}…${normalized.slice(-4)}`;
+}
+
+function parseWalletContractManifest(text: string): WalletContractManifest {
+  let value: unknown;
+  try {
+    value = JSON.parse(text);
+  } catch {
+    throw new Error('Wallet contract manifest must be valid JSON.');
+  }
+  if (!isRecord(value)) throw new Error('Wallet contract manifest must be an object.');
+  if (value.schemaVersion !== 1) throw new Error('Wallet contract manifest schemaVersion must be 1.');
+  if (value.artifactType !== 'wallet-contract-test') throw new Error('Wallet contract manifest artifactType is invalid.');
+  if (typeof value.createdAt !== 'string' || !value.createdAt) throw new Error('Wallet contract manifest createdAt is required.');
+  if (typeof value.appName !== 'string' || !value.appName) throw new Error('Wallet contract manifest appName is required.');
+  if (!isRecord(value.route)) throw new Error('Wallet contract manifest route is required.');
+  if (typeof value.route.name !== 'string' || !value.route.name) throw new Error('Wallet contract manifest route.name is required.');
+  if (typeof value.route.path !== 'string' || !value.route.path) throw new Error('Wallet contract manifest route.path is required.');
+  if (!isWalletContractScenario(value.scenario)) throw new Error('Wallet contract manifest scenario is invalid.');
+  if (typeof value.expectedChainId !== 'string' && typeof value.expectedChainId !== 'number') {
+    throw new Error('Wallet contract manifest expectedChainId is required.');
+  }
+  if (typeof value.maskedExpectedAccount !== 'string' || !/^0x[a-f0-9]{4}…[a-f0-9]{4}$/.test(value.maskedExpectedAccount)) {
+    throw new Error('Wallet contract manifest maskedExpectedAccount is invalid.');
+  }
+  if (!isRecord(value.screenshot)) throw new Error('Wallet contract manifest screenshot is required.');
+  const screenshot = value.screenshot;
+  if (typeof screenshot.file !== 'string' || !screenshot.file) {
+    throw new Error('Wallet contract manifest screenshot.file is required.');
+  }
+  if (typeof screenshot.sizeBytes !== 'number' || !Number.isSafeInteger(screenshot.sizeBytes) || screenshot.sizeBytes < 0) {
+    throw new Error('Wallet contract manifest screenshot.sizeBytes is invalid.');
+  }
+  if (typeof screenshot.sha256 !== 'string' || !/^[0-9a-f]{64}$/.test(screenshot.sha256)) {
+    throw new Error('Wallet contract manifest screenshot.sha256 is invalid.');
+  }
+  if (screenshot.contentType !== 'image/png') throw new Error('Wallet contract manifest screenshot.contentType is invalid.');
+  if (value.status !== 'passed' && value.status !== 'failed') throw new Error('Wallet contract manifest status is invalid.');
+  if ('assertionSummary' in value && typeof value.assertionSummary !== 'string') {
+    throw new Error('Wallet contract manifest assertionSummary is invalid.');
+  }
+  return {
+    schemaVersion: 1,
+    artifactType: 'wallet-contract-test',
+    createdAt: value.createdAt,
+    appName: value.appName,
+    route: { name: value.route.name, path: value.route.path },
+    scenario: value.scenario,
+    expectedChainId: value.expectedChainId,
+    maskedExpectedAccount: value.maskedExpectedAccount,
+    screenshot: {
+      file: screenshot.file,
+      sizeBytes: screenshot.sizeBytes,
+      sha256: screenshot.sha256,
+      contentType: 'image/png'
+    },
+    status: value.status,
+    ...(typeof value.assertionSummary === 'string' ? { assertionSummary: value.assertionSummary } : {})
+  };
+}
+
+function isWalletContractScenario(value: unknown): value is WalletContractScenario {
+  return value === 'disconnected' || value === 'connected' || value === 'wrong-chain' || value === 'invalid-account';
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
 function assertNoUnsafePublicText(text: string, options: WalletContractEvidenceOptions): void {

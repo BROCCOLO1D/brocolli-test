@@ -93,7 +93,7 @@ walletContractTests({
 });
 ```
 
-Each generated contract row writes a screenshot, a public-safe row manifest, and `wallet-contract-artifact-index.json`; failed app-owned assertions still emit failed evidence before the original error is rethrown. The route/disconnected row is always generated, and app-provided connected, wrong-chain, and invalid-account callbacks opt into deterministic scenario-backed state rows without moving selectors or UI expectations into the package.
+Each generated contract row writes a screenshot, a public-safe row manifest, and `wallet-contract-artifact-index.json`; failed app-owned assertions still emit failed evidence before the original error is rethrown. The route/disconnected row is always generated, and app-provided connected, wrong-chain, and invalid-account callbacks opt into deterministic scenario-backed state rows without moving selectors or UI expectations into the package. `verifyWalletContractManifest(artifactDir, manifestName)` re-validates the manifest schema and screenshot basename/size/SHA-256 pair before CI upload or reviewed evidence promotion.
 
 The existing fixture flow remains app-owned:
 
