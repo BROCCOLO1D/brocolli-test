@@ -8,6 +8,8 @@
 
 **Tech Stack:** TypeScript, Playwright fixtures, Vitest, EIP-1193 injected provider mocks, existing `walletArtifacts` proof/index helpers, existing fail-closed policy helpers.
 
+**Current status (2026-05-22):** Feature 11 and Feature 4 are implemented in `@broccolo1d/playwright` and covered by package tests, typecheck, packed-consumer verification, README examples, and root roadmap presentation. The remaining adoption blocker is publishing `@broccolo1d/playwright@0.2.10` to npm; the public registry still reports `0.2.9` as latest and the local ignored npm auth currently returns `E401` for `npm whoami`, so Wildcat should not consume a tarball or local workspace path as if it proved the public API contract.
+
 ---
 
 ## Priority Order for Next Cycles
@@ -658,11 +660,13 @@ npm run test:wallet:workflow
 
 # Verification Checklist
 
-- [ ] `walletScenario` unit tests pass.
-- [ ] `installDeterministicInjectedWallet` remains backwards compatible.
-- [ ] `walletContractTests` has a public package export.
-- [ ] Every contract row emits screenshot + JSON manifest + artifact-index entry.
-- [ ] README explicitly distinguishes UI smoke from real private-key-backed proof.
-- [ ] `packages/playwright` typecheck passes.
-- [ ] Packed package import/consumer test still passes before publishing.
+- [x] `walletScenario` unit tests pass.
+- [x] `installDeterministicInjectedWallet` remains backwards compatible.
+- [x] `walletContractTests` has a public package export.
+- [x] Every contract row emits screenshot + JSON manifest + artifact-index entry.
+- [x] README explicitly distinguishes UI smoke from real private-key-backed proof.
+- [x] `packages/playwright` typecheck passes.
+- [x] Packed package import/consumer test still passes before publishing.
 - [ ] Wildcat adoption uses public APIs only.
+
+Wildcat adoption remains intentionally unchecked until `@broccolo1d/playwright@0.2.10` is visible on npm and the downstream app can adopt it through normal package installation rather than a local tarball/workspace workaround.
