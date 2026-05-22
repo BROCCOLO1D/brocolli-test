@@ -1,6 +1,27 @@
-# brocolli-test
+<p align="center">
+  <img src="docs/assets/readme/wallet-qa-pipeline.svg" alt="brocolli-test wallet QA pipeline" width="100%" />
+</p>
 
-`brocolli-test` is a two-package workspace for wallet-backed dapp QA. It packages the browser-wallet runtime and the Playwright fixtures used by downstream apps such as Broccoli Control and Wildcat.
+<h1 align="center">brocolli-test</h1>
+
+<p align="center">
+  <strong>Policy-gated wallet automation for product-shaped dapp QA.</strong><br />
+  Browser-wallet runtime helpers plus Playwright fixtures for downstream apps such as Broccoli Control and Wildcat.
+</p>
+
+<p align="center">
+  <a href="https://github.com/BROCCOLO1D/brocolli-test"><img alt="Repository" src="https://img.shields.io/badge/repo-BROCCOLO1D%2Fbrocolli--test-1f6f3d?style=flat-square&logo=github" /></a>
+  <img alt="Node.js" src="https://img.shields.io/badge/node-%3E%3D22%20%3C23-3fb950?style=flat-square&logo=node.js&logoColor=white" />
+  <img alt="Playwright" src="https://img.shields.io/badge/Playwright-wallet%20QA-45ba63?style=flat-square&logo=playwright&logoColor=white" />
+  <img alt="Network" src="https://img.shields.io/badge/default%20network-Sepolia%20%2811155111%29-7c3aed?style=flat-square" />
+  <img alt="Safety" src="https://img.shields.io/badge/artifacts-public--safe-0ea5e9?style=flat-square" />
+</p>
+
+---
+
+## At a glance
+
+`brocolli-test` is a two-package workspace for wallet-backed dapp QA. It packages the browser-wallet runtime and the Playwright fixtures used by downstream apps.
 
 ```text
 @broccolo1d/playwright
@@ -11,12 +32,19 @@
 
 ## What it gives a dapp team
 
-- Policy-gated wallet actions for connect, chain checks, and signatures.
-- Declarative `walletScenario()` / `installWalletScenario()` states for disconnected, connected, wrong-chain, rejected/pending method, and optional EIP-6963 discovery smoke coverage.
-- Reusable `@broccolo1d/playwright/contracts` route/state rows that keep selectors app-owned while writing screenshot + manifest + artifact-index evidence.
-- Optional private-key-backed MetaMask flows for local/testnet proof capture.
-- Public-safe proof manifests, screenshots, and artifact indexes for review.
-- Fail-closed prompt/network guards so unknown prompts are not clicked by default.
+- **Policy-gated wallet actions** for connect, chain checks, and signatures.
+- **Deterministic scenarios** through `walletScenario()` / `installWalletScenario()` for disconnected, connected, wrong-chain, rejected/pending method, and optional EIP-6963 discovery smoke coverage.
+- **Reusable contract rows** from `@broccolo1d/playwright/contracts` that keep selectors app-owned while writing screenshot + manifest + artifact-index evidence.
+- **Optional real-wallet flows** for private-key-backed MetaMask local/testnet proof capture.
+- **Reviewable evidence** with public-safe proof manifests, screenshots, and artifact indexes.
+- **Fail-closed guardrails** so unknown prompts are not clicked by default.
+
+## Packages
+
+| Package | Version | Purpose |
+| --- | ---: | --- |
+| [`@broccolo1d/wallet-browser`](packages/wallet-browser/README.md) | `0.2.9` | Core browser automation for MetaMask integration with Chromium context management and wallet state verification. |
+| [`@broccolo1d/playwright`](packages/playwright/README.md) | `0.2.10` | Playwright test fixtures, deterministic wallet scenarios, reusable dapp contract rows, and structured proof artifacts. |
 
 ## Quick example
 
@@ -46,64 +74,6 @@ test('wallet connects on Sepolia', async ({ page, wallet, walletArtifacts }) => 
   await expect(page.getByText(/connected/i)).toBeVisible();
 });
 ```
-
-## Wildcat reference workflow
-
-Wildcat is the product-shaped reference for the package surface: a real Next.js dapp, Sepolia target wiring, app-shell smoke tests, optional private-key-backed MetaMask proof capture, and reviewed README screenshots.
-
-### CI-safe Wildcat smoke
-
-Use this shape when a production dapp needs app-shell coverage without loading private wallet material. It verifies that `/lender` renders on Sepolia, avoids locale middleware loops, exposes a connect affordance, and writes baseline artifacts.
-
-```bash
-NEXT_PUBLIC_TARGET_NETWORK=Sepolia \
-NEXT_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/test-alchemy-key \
-NEXT_PUBLIC_API_URL=https://api.wildcat.finance \
-NEXT_PUBLIC_TOKENS_LIST_URL=https://tokens.1inch.eth.link \
-NEXT_PUBLIC_TOKENS_IMG_HOSTNAME=tokens.1inch.io \
-WILDCAT_WALLET_QA_RUN_APP=1 \
-npm run test:wallet -- --grep "loads local lender shell"
-```
-
-### Connected-wallet Wildcat proof
-
-Connected-wallet evidence is intentionally stricter. It must use a private-key-env-var backed Sepolia test wallet / MetaMask flow from ignored local config or CI secrets. Public-address-only injected-wallet screenshots are not positive evidence for Wildcat.
-
-```bash
-chmod 600 .env
-set -a && . ./.env && set +a
-NEXT_PUBLIC_TARGET_NETWORK=Sepolia npm run test:wallet:real-metamask
-```
-
-A publishable Wildcat proof should promote only reviewed files into stable docs paths, for example:
-
-```text
-docs/screenshots/wildcat-connected-sepolia-test-wallet.png
-docs/screenshots/wildcat-connected-sepolia-test-wallet-proof.json
-```
-
-The screenshot should show the local Wildcat app with a connected deterministic Sepolia test wallet and visible network/account UI. No-wallet home pages, connect dialogs, blank pages, public-address-only injected-provider state, and raw `.wallet-artifacts` output are not acceptable as final README evidence.
-
-## Artifact index pattern
-
-After writing one or more proof manifests, write an index so CI and review agents can find public-safe evidence without scraping the whole Playwright output directory:
-
-```ts
-await verifyWalletQaProofManifest(walletArtifacts.artifactDir, 'wallet-connected.json');
-await walletArtifacts.writeArtifactIndex({
-  manifestNames: ['wallet-connected.json'],
-  outputName: 'wallet-qa-artifact-index.json'
-});
-```
-
-The index records manifest digests, masked account/chain/origin summaries, attachment basenames, hashes, and verification status. Upload it with reviewed screenshots and proof manifests; keep traces, raw videos, MetaMask profiles, extension bundles, and `.env` files out of git.
-
-## Packages
-
-| Package | Version | Purpose |
-| --- | ---: | --- |
-| [`@broccolo1d/wallet-browser`](packages/wallet-browser/README.md) | `0.2.9` | Core browser automation for MetaMask integration with Chromium context management and wallet state verification. |
-| [`@broccolo1d/playwright`](packages/playwright/README.md) | `0.2.10` | Playwright test fixtures, deterministic wallet scenarios, reusable dapp contract rows, and structured proof artifacts. |
 
 ## Runtime model
 
@@ -186,6 +156,57 @@ export default defineWalletQaConfig({
 
 `useRealWallet` defaults to `false`. When enabled, `wallet.connect`, `wallet.switchChain`, `wallet.signMessage`, and `wallet.signTypedData` still require explicit expected account/chain inputs and configured dapp, prompt, and network drivers. Signature helpers require the expected origin and message/canonical typed-data JSON before they trigger the dapp request or approve a MetaMask prompt. Transaction approval remains intentionally absent until a zero-value or capped-testnet policy is implemented and tested.
 
+## Wildcat reference workflow
+
+Wildcat is the product-shaped reference for the package surface: a real Next.js dapp, Sepolia target wiring, app-shell smoke tests, optional private-key-backed MetaMask proof capture, and reviewed README screenshots.
+
+### CI-safe Wildcat smoke
+
+Use this shape when a production dapp needs app-shell coverage without loading private wallet material. It verifies that `/lender` renders on Sepolia, avoids locale middleware loops, exposes a connect affordance, and writes baseline artifacts.
+
+```bash
+NEXT_PUBLIC_TARGET_NETWORK=Sepolia \
+NEXT_RPC_URL=https://eth-sepolia.g.alchemy.com/v2/test-alchemy-key \
+NEXT_PUBLIC_API_URL=https://api.wildcat.finance \
+NEXT_PUBLIC_TOKENS_LIST_URL=https://tokens.1inch.eth.link \
+NEXT_PUBLIC_TOKENS_IMG_HOSTNAME=tokens.1inch.io \
+WILDCAT_WALLET_QA_RUN_APP=1 \
+npm run test:wallet -- --grep "loads local lender shell"
+```
+
+### Connected-wallet Wildcat proof
+
+Connected-wallet evidence is intentionally stricter. It must use a private-key-env-var backed Sepolia test wallet / MetaMask flow from ignored local config or CI secrets. Public-address-only injected-wallet screenshots are not positive evidence for Wildcat.
+
+```bash
+chmod 600 .env
+set -a && . ./.env && set +a
+NEXT_PUBLIC_TARGET_NETWORK=Sepolia npm run test:wallet:real-metamask
+```
+
+A publishable Wildcat proof should promote only reviewed files into stable docs paths, for example:
+
+```text
+docs/screenshots/wildcat-connected-sepolia-test-wallet.png
+docs/screenshots/wildcat-connected-sepolia-test-wallet-proof.json
+```
+
+The screenshot should show the local Wildcat app with a connected deterministic Sepolia test wallet and visible network/account UI. No-wallet home pages, connect dialogs, blank pages, public-address-only injected-provider state, and raw `.wallet-artifacts` output are not acceptable as final README evidence.
+
+## Artifact index pattern
+
+After writing one or more proof manifests, write an index so CI and review agents can find public-safe evidence without scraping the whole Playwright output directory:
+
+```ts
+await verifyWalletQaProofManifest(walletArtifacts.artifactDir, 'wallet-connected.json');
+await walletArtifacts.writeArtifactIndex({
+  manifestNames: ['wallet-connected.json'],
+  outputName: 'wallet-qa-artifact-index.json'
+});
+```
+
+The index records manifest digests, masked account/chain/origin summaries, attachment basenames, hashes, and verification status. Upload it with reviewed screenshots and proof manifests; keep traces, raw videos, MetaMask profiles, extension bundles, and `.env` files out of git.
+
 ## Lower-level wallet-browser usage
 
 ```ts
@@ -254,6 +275,10 @@ Tarballs include package README files, the root license, package metadata, and b
 ## Safety model
 
 See [docs/security-and-artifacts.md](docs/security-and-artifacts.md) for the full handling policy.
+
+- Keep traces, raw videos, MetaMask profiles, extension bundles, `.env` files, and raw `.wallet-artifacts` output out of git.
+- Publish only reviewed screenshots, proof manifests, and artifact indexes.
+- Prefer deterministic CI smoke first; promote private-key-backed Sepolia evidence only after manual review.
 
 ## Docs
 

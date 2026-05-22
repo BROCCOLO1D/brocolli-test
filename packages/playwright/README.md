@@ -1,13 +1,31 @@
-# `@broccolo1d/playwright`
+<p align="center">
+  <img src="../../docs/assets/readme/wallet-qa-pipeline.svg" alt="@broccolo1d/playwright wallet QA pipeline" width="100%" />
+</p>
 
-Playwright fixtures for policy-gated browser-wallet dapp QA.
+<h1 align="center"><code>@broccolo1d/playwright</code></h1>
 
-This package is for consumer app repos. The app owns routes, selectors, wallet modal behavior, test data, prompt automation, and assertions. `@broccolo1d/playwright` provides the fixture surface for connect/account/chain proof, artifact capture, and fail-closed policy wiring.
+<p align="center">
+  <strong>Playwright fixtures for policy-gated browser-wallet dapp QA.</strong><br />
+  Dapp-owned selectors and assertions, package-owned wallet proof capture and fail-closed wiring.
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@broccolo1d/playwright"><img alt="npm package" src="https://img.shields.io/badge/npm-%40broccolo1d%2Fplaywright-cb3837?style=flat-square&logo=npm&logoColor=white" /></a>
+  <img alt="Version" src="https://img.shields.io/badge/version-0.2.10-1f6f3d?style=flat-square" />
+  <img alt="Node.js" src="https://img.shields.io/badge/node-%3E%3D22%20%3C23-3fb950?style=flat-square&logo=node.js&logoColor=white" />
+  <img alt="Playwright" src="https://img.shields.io/badge/Playwright-fixtures-45ba63?style=flat-square&logo=playwright&logoColor=white" />
+</p>
+
+---
+
+## Overview
+
+This package is for consumer app repos. The app owns routes, selectors, wallet modal behavior, test data, prompt automation, and assertions. `@broccolo1d/playwright` provides the fixture surface for connect/account/chain proof, artifact capture, deterministic wallet scenarios, reusable contract rows, and fail-closed policy wiring.
 
 ## Install
 
 ```bash
-pnpm add -D @broccolo1d/playwright@0.2.9 @playwright/test
+pnpm add -D @broccolo1d/playwright@0.2.10 @playwright/test
 ```
 
 ESM-only. Node.js `>=22 <23`.

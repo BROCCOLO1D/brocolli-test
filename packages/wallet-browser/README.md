@@ -1,6 +1,24 @@
-# `@broccolo1d/wallet-browser`
+<p align="center">
+  <img src="../../docs/assets/readme/wallet-qa-pipeline.svg" alt="@broccolo1d/wallet-browser runtime pipeline" width="100%" />
+</p>
 
-Core browser-wallet runtime helpers for dapp QA.
+<h1 align="center"><code>@broccolo1d/wallet-browser</code></h1>
+
+<p align="center">
+  <strong>Core browser-wallet runtime helpers for dapp QA.</strong><br />
+  Chromium/MetaMask launch configuration, prompt guardrails, network/account assertions, local smoke artifacts, and a setup CLI.
+</p>
+
+<p align="center">
+  <a href="https://www.npmjs.com/package/@broccolo1d/wallet-browser"><img alt="npm package" src="https://img.shields.io/badge/npm-%40broccolo1d%2Fwallet--browser-cb3837?style=flat-square&logo=npm&logoColor=white" /></a>
+  <img alt="Version" src="https://img.shields.io/badge/version-0.2.9-1f6f3d?style=flat-square" />
+  <img alt="Node.js" src="https://img.shields.io/badge/node-%3E%3D22%20%3C23-3fb950?style=flat-square&logo=node.js&logoColor=white" />
+  <img alt="MetaMask" src="https://img.shields.io/badge/MetaMask-guarded%20runtime-f6851b?style=flat-square" />
+</p>
+
+---
+
+## Overview
 
 This lower-level package owns Chromium/MetaMask launch configuration, prompt guardrails, network/account assertions, local smoke artifacts, proof verification, and the `wallet-browser` CLI. Most app test suites should consume `@broccolo1d/playwright`; use this package directly for custom runners, package integrations, and low-level wallet runtime work.
 
