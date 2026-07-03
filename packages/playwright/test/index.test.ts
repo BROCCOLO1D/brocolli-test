@@ -71,6 +71,10 @@ describe('@broccolo1d/playwright exports', () => {
     expect(rootReadme).toContain(`@broccolo1d/playwright@${packageJson.version}`);
     expect(releaseScript).toContain("npm', ['whoami'");
     expect(releaseScript).toContain("npm', ['view', `@broccolo1d/playwright@${playwrightVersion}`");
+    expect(releaseScript).toContain('NPM_TOKEN');
+    expect(releaseScript).toContain('NODE_AUTH_TOKEN');
+    expect(releaseScript).toContain('--userconfig');
+    expect(releaseScript).toContain('mkdtemp');
   });
 
   it('keeps the published dist provenance version aligned with package.json', async () => {
