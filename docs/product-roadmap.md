@@ -5,7 +5,9 @@
 The product line is now public package oriented:
 
 - `@broccolo1d/wallet-browser@0.2.9` — core browser-wallet runtime, guardrails, CLI, and artifact helpers.
-- `@broccolo1d/playwright@0.2.9` — Playwright fixtures for downstream dapp QA suites.
+- `@broccolo1d/playwright@0.2.10` — Playwright fixtures for downstream dapp QA suites, including deterministic wallet scenarios and reusable contract-test rows.
+
+`@broccolo1d/playwright@0.2.10` is the local release candidate documented here; Wildcat should adopt it through normal package installation only after that version is visible on npm, not through a local tarball/workspace workaround.
 
 Target-specific scripts are not the product. Downstream apps own selectors, routes, modal behavior, assertions, and test data. These packages own wallet runtime primitives, policy boundaries, and verification contracts.
 
@@ -35,9 +37,11 @@ The harness should make those answers repeatable for humans, CI, and agents with
 ### Importable packages
 
 ```bash
-pnpm add -D @broccolo1d/playwright@0.2.9 @playwright/test
+pnpm add -D @broccolo1d/playwright@0.2.10 @playwright/test
 pnpm add -D @broccolo1d/wallet-browser@0.2.9 playwright
 ```
+
+If npm still reports `@broccolo1d/playwright@0.2.9` as latest, wait for the `0.2.10` publish before adopting the scenario/contract APIs in downstream apps.
 
 ### Playwright fixture layer
 

@@ -53,6 +53,12 @@ describe('@broccolo1d/playwright exports', () => {
     expect(rootReadme).toContain(`@broccolo1d/playwright\`](packages/playwright/README.md) | \`${packageJson.version}\``);
   });
 
+  it('keeps product roadmap install examples aligned with package.json releases', async () => {
+    const productRoadmap = await readFile(new URL('../../../docs/product-roadmap.md', import.meta.url), 'utf8');
+
+    expect(productRoadmap).toContain(`@broccolo1d/playwright@${packageJson.version}`);
+  });
+
   it('keeps the published dist provenance version aligned with package.json', async () => {
     const distIndex = await readFile(new URL('../dist/index.js', import.meta.url), 'utf8');
 
