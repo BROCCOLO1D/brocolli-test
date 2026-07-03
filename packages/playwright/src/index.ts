@@ -6,6 +6,7 @@ import { basename, dirname, isAbsolute, join, resolve } from 'node:path';
 import { defineConfig, expect, test as base, type BrowserContext, type Page, type PlaywrightTestConfig, type TestInfo } from '@playwright/test';
 import {
   approveSignature,
+  approveTransaction,
   assertWalletState,
   connectWallet,
   createWalletDappPageDriver,
@@ -164,6 +165,20 @@ export interface WalletSignatureOptions extends WalletAssertStateOptions {
   guardrails?: WalletGuardrailConfig;
 }
 
+export interface WalletTransactionOptions extends WalletAssertStateOptions {
+  /** Developer-first dapp action: click/request the transaction in the app. */
+  click?: () => Promise<void>;
+  /** Backwards-compatible explicit dapp transaction action alias. */
+  requestTransaction?: () => Promise<void>;
+  /** Expected dapp origin. Defaults to walletConfig.origin; missing origin fails closed. */
+  origin?: string;
+  /** Optional transaction target. When supplied it is normalized and checked against guardrails. */
+  to?: string;
+  /** Optional transaction value in wei. Defaults to 0 in the lower-level policy helper. */
+  value?: string;
+  guardrails?: WalletGuardrailConfig;
+}
+
 export type WalletSwitchChainOptions = WalletAssertStateOptions;
 
 export interface WalletQa {
@@ -174,6 +189,7 @@ export interface WalletQa {
   switchChain(options?: WalletSwitchChainOptions): Promise<SepoliaNetworkAssertionResult>;
   signMessage(options: WalletSignatureOptions): Promise<void>;
   signTypedData(options: WalletSignatureOptions): Promise<void>;
+  approveTransaction(options: WalletTransactionOptions): Promise<void>;
   maskAddress(address: string): string;
 }
 
@@ -741,6 +757,37 @@ export function createWalletQa(page: Page, config: WalletQaConfig): WalletQa {
       return signWithKind('wallet.signTypedData', 'typed_data', options);
     },
 
+    async approveTransaction(options) {
+      const expectedAccount = options.expectedAccount ?? config.expectedAccount;
+      if (!expectedAccount) {
+        throw new Error('wallet.approveTransaction requires expectedAccount in options or walletConfig.');
+      }
+
+      const origin = options.origin ?? config.origin;
+      if (!origin) {
+        throw new Error('wallet.approveTransaction requires origin in options or walletConfig.origin before approving a wallet prompt; fail closed.');
+      }
+
+      const prompt = requireConfigured(config.prompt, 'wallet.approveTransaction requires walletConfig.prompt to approve a real wallet prompt; fail closed.');
+      const dapp = createTransactionDappDriver(page, config, options.click ?? options.requestTransaction);
+      const expectedChainId = options.expectedChainId ?? config.expectedChainId;
+      const network = expectedChainId === undefined
+        ? undefined
+        : requireConfigured(config.network, 'wallet.approveTransaction requires walletConfig.network when expectedChainId is configured; fail closed.');
+
+      return approveTransaction({
+        dapp,
+        prompt,
+        network,
+        origin,
+        expectedAccount,
+        expectedChainId,
+        to: options.to,
+        value: options.value,
+        guardrails: options.guardrails ?? config.guardrails
+      });
+    },
+
     maskAddress(address: string) {
       return maskEthereumAddress(address);
     }
@@ -781,6 +828,24 @@ function createSignatureDappDriver(page: Page, config: WalletQaConfig, requestSi
     return { requestSignature: createWalletDappPageDriver({ page, selectors: config.dappSelectors }).requestSignature };
   }
   throw new Error('wallet signature helpers require click, requestSignature, or walletConfig.dapp.requestSignature to trigger the dapp signature action; fail closed.');
+}
+
+function createTransactionDappDriver(page: Page, config: WalletQaConfig, requestTransaction?: () => Promise<void>): Pick<WalletDappDriver, 'requestTransaction'> {
+  const configured = config.dapp;
+  if (requestTransaction) {
+    return {
+      async requestTransaction() {
+        await requestTransaction();
+      }
+    };
+  }
+  if (configured?.requestTransaction) {
+    return { requestTransaction: configured.requestTransaction.bind(configured) };
+  }
+  if (config.dappSelectors) {
+    return { requestTransaction: createWalletDappPageDriver({ page, selectors: config.dappSelectors }).requestTransaction };
+  }
+  throw new Error('wallet transaction helpers require click, requestTransaction, or walletConfig.dapp.requestTransaction to trigger the dapp transaction action; fail closed.');
 }
 
 export function createWalletArtifacts(page: Page, config: WalletQaConfig, testInfo: TestInfo): WalletArtifacts {

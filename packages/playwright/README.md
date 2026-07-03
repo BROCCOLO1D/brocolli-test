@@ -114,6 +114,17 @@ test('connects through wallet policy', async ({ page, wallet, walletArtifacts })
     click: async () => page.getByRole('button', { name: /sign typed data/i }).click()
   });
 
+  await wallet.approveTransaction({
+    to: '0x2222222222222222222222222222222222222222',
+    value: '0',
+    click: async () => page.getByRole('button', { name: /send test transaction/i }).click(),
+    guardrails: {
+      allowedOrigins: ['http://127.0.0.1:5173'],
+      allowedTargets: ['0x2222222222222222222222222222222222222222'],
+      maxTransactionValueWei: '0'
+    }
+  });
+
   const screenshot = await walletArtifacts.screenshot('connected');
   await walletArtifacts.connectedProof('wallet-connected', {
     origin: 'http://127.0.0.1:5173',
@@ -282,6 +293,7 @@ Use `verifyWalletContractManifest(artifactDir, manifestName)` in CI or promotion
 - `defineWalletQaConfig(config)`: typed Playwright config wrapper for wallet QA fixtures.
 - `walletScenario()` / `installWalletScenario(page, scenario)`: build and install deterministic disconnected, connected, wrong-chain, scripted signature/transaction outcome, and optional EIP-6963 provider states for CI-safe dapp UI smoke tests. This helper does not prove possession of a private key.
 - `installDeterministicInjectedWallet(page, { account, chainId })`: backwards-compatible connected scenario shortcut that installs a minimal deterministic EIP-1193 provider with a non-zero public test account, `eth_accounts`/`eth_requestAccounts`, `eth_chainId`/`net_version`, guarded chain-switch responses, and default MetaMask-compatible discovery metadata. Use this for dapp-owned smoke tests that should verify connected UI without real private wallet material.
+- `wallet.approveTransaction({ to, value, click, guardrails })`: policy-first transaction helper that delegates to guarded wallet-browser approval only after app-owned dapp trigger, origin/account checks, optional chain verification, and explicit target/value caps.
 - `verifyWalletContractManifest(artifactDir, manifestName)`: verifies wallet contract-test manifest shape plus the referenced screenshot basename, size, and SHA-256 checksum before CI artifact promotion or README screenshot review.
 - `createFailClosedWalletPromptDriver(options)`: wraps explicit prompt automation and rejects missing handlers, missing/wrong origin, wrong account, or wrong chain.
 - `writeWalletQaProofManifest(options)`: writes a public schema v1 proof manifest with safe attachment metadata, provenance, summaries, checksums, optional prompt/action decisions, and redacted failures.
@@ -313,7 +325,9 @@ try {
 
 `wallet.signMessage` and `wallet.signTypedData` are the supported signature helpers for SIWE/personal-sign and typed-data flows. They require expected account, expected chain ID, origin, expected message text/canonical typed-data JSON, `walletConfig.network`, `walletConfig.prompt`, and a dapp trigger (`click`, `requestSignature`, `walletConfig.dapp.requestSignature`, or `walletConfig.dappSelectors`). The helpers assert wallet state before requesting the dapp signature and then approve only the matching `personal_sign` or `typed_data` prompt.
 
-No prompt approval is implicit. Transaction approval is not exposed by this fixture API yet; add it only after a zero-value or explicit capped-testnet policy exists with rejection tests.
+`wallet.approveTransaction` exposes the lower-level guarded transaction approval surface with the same fail-closed defaults. It requires expected account, origin, `walletConfig.prompt`, and a dapp trigger (`click`, `requestTransaction`, `walletConfig.dapp.requestTransaction`, or `walletConfig.dappSelectors`). If `expectedChainId` is present in options or config it also requires `walletConfig.network` and verifies chain/account before prompting. Always pass explicit guardrails such as `allowedOrigins`, `allowedTargets`, and `maxTransactionValueWei`; zero-value or tightly capped testnet transactions are the intended scope.
+
+No prompt approval is implicit. Transaction prompts without explicit origin/account/target/value policy and a configured delegate still fail closed.
 
 ## CI pattern
 
