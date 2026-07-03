@@ -135,6 +135,36 @@ describe('developer-first wallet QA fixture helpers', () => {
     ]);
   });
 
+  it('exposes a policy-first transaction helper with explicit origin, target, and value guardrails', async () => {
+    const events: string[] = [];
+    const wallet = createWalletQa(undefined as any, {
+      expectedAccount: ACCOUNT,
+      expectedChainId: 11155111,
+      origin: 'https://app.example',
+      dapp: {
+        async requestConnect() {},
+        async getConnectedAccount() { return ACCOUNT; },
+        async requestTransaction(input) { events.push(`dapp:${input.origin}:${input.to}:${input.value}`); }
+      },
+      prompt: {
+        async approveTransaction(input) { events.push(`prompt:${input.origin}:${input.expectedAccount}:${input.to}:${input.value}`); }
+      },
+      network: createNetworkStub(),
+      guardrails: {
+        maxTransactionValueWei: '1000',
+        allowedOrigins: ['https://app.example'],
+        allowedTargets: [OTHER_ACCOUNT]
+      }
+    });
+
+    await wallet.approveTransaction({ to: OTHER_ACCOUNT, value: '500' });
+
+    expect(events).toEqual([
+      `dapp:https://app.example:${OTHER_ACCOUNT}:500`,
+      `prompt:https://app.example:${ACCOUNT}:${OTHER_ACCOUNT}:500`
+    ]);
+  });
+
   it('fails closed before requesting a signature when origin or chain/account expectations are missing', async () => {
     const events: string[] = [];
     const wallet = createWalletQa(undefined as any, {
