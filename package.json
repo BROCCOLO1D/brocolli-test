@@ -20,6 +20,7 @@
     "wallet:metamask:fetch": "python3 scripts/fetch-metamask-extension.py",
     "verify:playwright-consumer": "node scripts/verify-playwright-consumer.mjs",
     "verify:playwright-release": "node scripts/verify-playwright-release-readiness.mjs",
+    "publish:playwright": "node scripts/publish-playwright.mjs",
     "security:scan": "python3 scripts/sensitive-scan.py"
   },
   "devDependencies": {

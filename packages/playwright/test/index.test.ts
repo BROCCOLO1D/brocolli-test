@@ -77,6 +77,25 @@ describe('@broccolo1d/playwright exports', () => {
     expect(releaseScript).toContain('mkdtemp');
   });
 
+  it('documents a token-backed plain npm publish helper for the current Playwright version', async () => {
+    const rootPackageJson = JSON.parse(await readFile(new URL('../../../package.json', import.meta.url), 'utf8')) as {
+      scripts: Record<string, string>;
+    };
+    const rootReadme = await readFile(new URL('../../../README.md', import.meta.url), 'utf8');
+    const publishScript = await readFile(new URL('../../../scripts/publish-playwright.mjs', import.meta.url), 'utf8');
+
+    expect(rootPackageJson.scripts['publish:playwright']).toBe('node scripts/publish-playwright.mjs');
+    expect(rootReadme).toContain('npm run publish:playwright');
+    expect(rootReadme).toContain(`@broccolo1d/playwright@${packageJson.version}`);
+    expect(publishScript).toContain('npm publish');
+    expect(publishScript).toContain('--access');
+    expect(publishScript).toContain('public');
+    expect(publishScript).toContain('--userconfig');
+    expect(publishScript).toContain('NPM_TOKEN');
+    expect(publishScript).toContain('NODE_AUTH_TOKEN');
+    expect(publishScript).toContain('packages/playwright');
+  });
+
   it('keeps the published dist provenance version aligned with package.json', async () => {
     const distIndex = await readFile(new URL('../dist/index.js', import.meta.url), 'utf8');
 
