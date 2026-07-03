@@ -275,6 +275,8 @@ Tarballs include package README files, the root license, package metadata, and b
 
 Run `npm run verify:playwright-release` before adopting a new public release in downstream apps such as Wildcat. It checks that the current `@broccolo1d/playwright@0.2.10` package version is still unpublished on npm and that local npm registry auth is active, without printing tokens or publishing anything. If npm auth fails, refresh an ignored local automation/granular token or use an OTP-backed publish flow before running `npm publish --access public` from `packages/playwright`.
 
+When the readiness check is green and local tests/pack review pass, prefer `npm run publish:playwright` for the actual package publish. The helper uses plain `npm publish` from `packages/playwright` with a token-backed temporary `--userconfig`, loading `NPM_TOKEN` or `NODE_AUTH_TOKEN` from the environment or ignored local `.env`, then removes the temporary npm config after publish. Use `npm run publish:playwright -- --dry-run` for a final no-publish inspection with the same auth path.
+
 ## Safety model
 
 See [docs/security-and-artifacts.md](docs/security-and-artifacts.md) for the full handling policy.
