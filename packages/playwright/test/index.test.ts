@@ -59,6 +59,20 @@ describe('@broccolo1d/playwright exports', () => {
     expect(productRoadmap).toContain(`@broccolo1d/playwright@${packageJson.version}`);
   });
 
+  it('documents and scripts registry release readiness checks for the current Playwright version', async () => {
+    const rootPackageJson = JSON.parse(await readFile(new URL('../../../package.json', import.meta.url), 'utf8')) as {
+      scripts: Record<string, string>;
+    };
+    const rootReadme = await readFile(new URL('../../../README.md', import.meta.url), 'utf8');
+    const releaseScript = await readFile(new URL('../../../scripts/verify-playwright-release-readiness.mjs', import.meta.url), 'utf8');
+
+    expect(rootPackageJson.scripts['verify:playwright-release']).toBe('node scripts/verify-playwright-release-readiness.mjs');
+    expect(rootReadme).toContain('npm run verify:playwright-release');
+    expect(rootReadme).toContain(`@broccolo1d/playwright@${packageJson.version}`);
+    expect(releaseScript).toContain("npm', ['whoami'");
+    expect(releaseScript).toContain("npm', ['view', `@broccolo1d/playwright@${playwrightVersion}`");
+  });
+
   it('keeps the published dist provenance version aligned with package.json', async () => {
     const distIndex = await readFile(new URL('../dist/index.js', import.meta.url), 'utf8');
 

@@ -268,9 +268,12 @@ pnpm wallet:smoke:verify .wallet-artifacts/metamask-smoke/<run-id>
 pnpm --filter @broccolo1d/wallet-browser pack --dry-run
 pnpm --filter @broccolo1d/playwright pack --dry-run
 npm run verify:playwright-consumer
+npm run verify:playwright-release
 ```
 
 Tarballs include package README files, the root license, package metadata, and built `dist/` output. `npm run verify:playwright-consumer` builds the Playwright package, packs both workspace packages, installs the tarballs into a temporary ESM TypeScript consumer, and typechecks public imports from both `@broccolo1d/playwright` and `@broccolo1d/playwright/contracts`. It does not use wallet secrets or publish packages.
+
+Run `npm run verify:playwright-release` before adopting a new public release in downstream apps such as Wildcat. It checks that the current `@broccolo1d/playwright@0.2.10` package version is still unpublished on npm and that local npm registry auth is active, without printing tokens or publishing anything. If npm auth fails, refresh an ignored local automation/granular token or use an OTP-backed publish flow before running `npm publish --access public` from `packages/playwright`.
 
 ## Safety model
 
