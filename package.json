@@ -19,6 +19,7 @@
     "wallet:smoke:verify": "pnpm --filter @broccolo1d/wallet-browser build && node packages/wallet-browser/dist/cli.js verify-smoke-artifacts",
     "wallet:metamask:fetch": "python3 scripts/fetch-metamask-extension.py",
     "verify:playwright-consumer": "node scripts/verify-playwright-consumer.mjs",
+    "verify:playwright-release": "node scripts/verify-playwright-release-readiness.mjs",
     "security:scan": "python3 scripts/sensitive-scan.py"
   },
   "devDependencies": {
